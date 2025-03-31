@@ -9,6 +9,7 @@ swad_MODULES=		handler/root \
 			main \
 			mediatype \
 			middleware/compress \
+			middleware/cookies \
 			middleware/pathparser \
 			urlencode \
 			util

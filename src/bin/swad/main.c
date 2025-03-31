@@ -1,6 +1,7 @@
 #include "handler/root.h"
 #include "httpserver.h"
 #include "middleware/compress.h"
+#include "middleware/cookies.h"
 #include "middleware/pathparser.h"
 
 #include <poser/core.h>
@@ -18,6 +19,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     HttpServerOpts_destroy(opts);
 
     HttpServer_addMiddleware(server, MW_Compress);
+    HttpServer_addMiddleware(server, MW_Cookies);
     HttpServer_addMiddleware(server, MW_PathParser);
 
     HttpServer_addRoute(server, "/", rootHandler, HTTP_GET, 0);
