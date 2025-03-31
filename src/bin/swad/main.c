@@ -3,6 +3,7 @@
 #include "middleware/compress.h"
 #include "middleware/cookies.h"
 #include "middleware/pathparser.h"
+#include "middleware/session.h"
 
 #include <poser/core.h>
 
@@ -14,6 +15,8 @@ static void prestartup(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
+    MW_Session_init();
+
     HttpServerOpts *opts = HttpServerOpts_create(8080);
     server = HttpServer_create(opts);
     HttpServerOpts_destroy(opts);
@@ -21,6 +24,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     HttpServer_addMiddleware(server, MW_Compress);
     HttpServer_addMiddleware(server, MW_Cookies);
     HttpServer_addMiddleware(server, MW_PathParser);
+    HttpServer_addMiddleware(server, MW_Session);
 
     HttpServer_addRoute(server, "/", rootHandler, HTTP_GET, 0);
 }
@@ -32,6 +36,7 @@ static void shutdown(void *receiver, void *sender, void *args)
     (void)args;
 
     HttpServer_destroy(server);
+    MW_Session_done();
 }
 
 int main(void)

@@ -1,5 +1,6 @@
 swad_VERSION=		0.1
-swad_MODULES=		handler/root \
+swad_MODULES=		base64 \
+			handler/root \
 			http/header \
 			http/headerset \
 			http/httpcontext \
@@ -11,6 +12,8 @@ swad_MODULES=		handler/root \
 			middleware/compress \
 			middleware/cookies \
 			middleware/pathparser \
+			middleware/session \
+			random \
 			urlencode \
 			util
 swad_PKGDEPS=		posercore \
