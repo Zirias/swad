@@ -1,0 +1,45 @@
+<html>
+  <head>
+    <title>SWAD Login</title>
+<style type="text/css">
+* {
+  font-family: sans-serif;
+  background-color: black;
+  color: lightgray;
+}
+body {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+input {
+  margin: .5em;
+  padding: .2em;
+  position: relative;
+  left: 50%;
+  transform: translate(-50%, 0);
+  border-style: solid;
+  border-color: darkgray;
+  border-width: 2pt;
+  border-radius: 4pt;
+  outline: none;
+}
+input:focus {
+  border-style: solid;
+  border-color: lightblue;
+  outline: none;
+}
+</style>
+  </head>
+  <body>
+    <h1>SWAD Login</h1>
+    <form action="%%SELF%%" method="post" autocomplete="off">
+      <input type="text" name="user" placeholder="user name" value="%%USER%%"
+	  maxlength="32" autofocus><br>
+      <input type="password" name="pw" placeholder="password"
+	  maxlength="32"><br>
+      <input type="submit" name="login" value="login">
+    </form>
+  </body>
+</html>

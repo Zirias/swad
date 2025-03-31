@@ -1,7 +1,9 @@
+#include "handler/login.h"
 #include "handler/root.h"
 #include "httpserver.h"
 #include "middleware/compress.h"
 #include "middleware/cookies.h"
+#include "middleware/formdata.h"
 #include "middleware/pathparser.h"
 #include "middleware/session.h"
 
@@ -15,6 +17,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
+    MW_FormData_setValidation(FDV_UTF8_SANITIZE);
     MW_Session_init();
 
     HttpServerOpts *opts = HttpServerOpts_create(8080);
@@ -23,9 +26,11 @@ static void prestartup(void *receiver, void *sender, void *args)
 
     HttpServer_addMiddleware(server, MW_Compress);
     HttpServer_addMiddleware(server, MW_Cookies);
-    HttpServer_addMiddleware(server, MW_PathParser);
     HttpServer_addMiddleware(server, MW_Session);
+    HttpServer_addMiddleware(server, MW_PathParser);
+    HttpServer_addMiddleware(server, MW_FormData);
 
+    HttpServer_addRoute(server, "/login", loginHandler, HTTP_GET|HTTP_POST, 0);
     HttpServer_addRoute(server, "/", rootHandler, HTTP_GET, 0);
 }
 

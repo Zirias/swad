@@ -14,7 +14,6 @@ defaults.mk
 *.bin
 *.exo
 *.prg
-*.html
 *.path-cache
 *.xct
 /*.cfg
@@ -23,4 +22,10 @@ defaults.mk
 /obj/
 /test/
 /dist/
-
+/tools/*/bin/
+/tools/*/lib/
+/tools/*/obj/
+/tools/*/test/
+/tools/*/dist/
+/tools/bin/
+*.html.h
