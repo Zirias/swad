@@ -237,6 +237,16 @@ void HttpContext_destroy(HttpContext *self)
 	    prop = next;
 	}
     }
+    if (self->conn)
+    {
+	if (!self->remoteHost)
+	{
+	    PSC_Event_unregister(PSC_Connection_nameResolved(self->conn),
+		    self, nameResolved, 0);
+	}
+	PSC_Event_unregister(PSC_Connection_closed(self->conn), self,
+		connectionClosed, 0);
+    }
     free(self->remoteHost);
     free(self->remoteAddr);
     free(self);
