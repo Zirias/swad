@@ -1,3 +1,4 @@
+#include "authenticator.h"
 #include "handler/login.h"
 #include "handler/root.h"
 #include "httpserver.h"
@@ -8,8 +9,15 @@
 #include "middleware/session.h"
 
 #include <poser/core.h>
+#include <string.h>
 
 static HttpServer *server;
+
+static char *dummyChecker(const char *user, const char *pw)
+{
+    if (strcmp(user, pw)) return 0;
+    return PSC_copystr(user);
+}
 
 static void prestartup(void *receiver, void *sender, void *args)
 {
@@ -19,6 +27,9 @@ static void prestartup(void *receiver, void *sender, void *args)
 
     MW_FormData_setValidation(FDV_UTF8_SANITIZE);
     MW_Session_init();
+    Authenticator_init();
+    Authenticator_registerChecker("dummy", dummyChecker);
+    Authenticator_configureRealm(DEFAULT_REALM, "dummy");
 
     HttpServerOpts *opts = HttpServerOpts_create(8080);
     server = HttpServer_create(opts);
@@ -41,6 +52,7 @@ static void shutdown(void *receiver, void *sender, void *args)
     (void)args;
 
     HttpServer_destroy(server);
+    Authenticator_done();
     MW_Session_done();
 }
 

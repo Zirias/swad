@@ -2,7 +2,8 @@ GEN_BIN2CSTR_tool=	$(BIN2CSTR_TARGET)
 GEN_BIN2CSTR_args=	$1 $2
 
 swad_VERSION=		0.1
-swad_MODULES=		base64 \
+swad_MODULES=		authenticator \
+			base64 \
 			handler/login \
 			handler/root \
 			htmlescape \
