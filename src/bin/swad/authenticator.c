@@ -189,6 +189,16 @@ void Authenticator_destroy(Authenticator *self)
     free(self);
 }
 
+const char *User_username(const User *self)
+{
+    return self->username;
+}
+
+const char *User_realname(const User *self)
+{
+    return self->realname;
+}
+
 void Authenticator_init(void)
 {
     checkers = PSC_HashTable_create(4);

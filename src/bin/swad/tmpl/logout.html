@@ -34,12 +34,10 @@ input:focus {
   </head>
   <body>
     <h1>%%REALM%% Login</h1>
+    <p>Already logged in as:</p>
+    <p><em>%%USER%% (%%REALNAME%%)</em></p>
     <form action="%%SELF%%" method="post" autocomplete="off">
-      <input type="text" name="user" placeholder="user name" value="%%USER%%"
-	  maxlength="32" autofocus><br>
-      <input type="password" name="pw" placeholder="password"
-	  maxlength="32"><br>
-      <input type="submit" name="login" value="login">
+      <input type="submit" name="logout" value="logout">
     </form>
   </body>
 </html>

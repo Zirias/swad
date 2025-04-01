@@ -28,7 +28,8 @@ swad_MODULES=		authenticator \
 			util
 swad_PKGDEPS=		posercore \
 			zlib
-swad_TMPL=		login
+swad_TMPL=		login \
+			logout
 swad_GEN=		BIN2CSTR
 swad_BIN2CSTR_FILES=	$(foreach l,$(swad_TMPL),tmpl/$l.html.h:tmpl/$l.html)
 

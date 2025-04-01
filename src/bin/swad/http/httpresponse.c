@@ -1,5 +1,6 @@
 #include "httpresponse.h"
 
+#include "../htmlescape.h"
 #include "../util.h"
 #include "header.h"
 #include "headerset.h"
@@ -161,20 +162,18 @@ HttpResponse *HttpResponse_createRedirect(
     HttpResponse *self = HttpResponse_create(status, MT_HTML);
     if (!self) return 0;
     const char *ststr = statusStr(status);
-    size_t contentSize = REDIRECT_SIZE + strlen(ststr) + 3* strlen(location);
+    char *contentloc = htmlescape(location, 0);
+    size_t contentSize = REDIRECT_SIZE + strlen(ststr) + 3* strlen(contentloc);
     char *rdrContent = PSC_malloc(contentSize + 1);
-    sprintf(rdrContent, REDIRECT_FORMAT, ststr, location, location, location);
+    sprintf(rdrContent, REDIRECT_FORMAT, ststr,
+	    contentloc, contentloc, contentloc);
+    free(contentloc);
     self->bodySize = contentSize;
     self->body = (uint8_t *)rdrContent;
     char sizeStr[64];
     snprintf(sizeStr, 64, "%zu", contentSize);
     HeaderSet_set(self->headers, Header_create("Content-Length", sizeStr));
-    if (status == HTTP_UNAUTHORIZED)
-    {
-	HeaderSet_set(self->headers, Header_create("WWW-Authenticate",
-		    "PBLoginForm realm=\"PB\""));
-    }
-    else
+    if (status <= 300 && status < 400)
     {
 	HeaderSet_set(self->headers, Header_create("Location", location));
     }

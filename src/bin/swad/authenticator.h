@@ -28,8 +28,8 @@ int Authenticator_login(Authenticator *self, const char *user, const char *pw)
 void Authenticator_logout(Authenticator *self) CMETHOD;
 void Authenticator_destroy(Authenticator *self);
 
-const char *User_username(const User *user) CMETHOD ATTR_RETNONNULL;
-const char *User_realname(const User *user) CMETHOD;
+const char *User_username(const User *self) CMETHOD ATTR_RETNONNULL;
+const char *User_realname(const User *self) CMETHOD;
 
 void Authenticator_init(void);
 void Authenticator_registerChecker(
