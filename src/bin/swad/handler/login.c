@@ -42,7 +42,7 @@ static void doLogin(HttpContext *context, const char *realm)
 
 	Session_setProp(session, "login_user", PSC_copystr(user), free);
 	Authenticator *auth = Authenticator_create(session, realm);
-	if (Authenticator_login(auth, pw, user))
+	if (Authenticator_login(auth, user, pw))
 	{
 	    status = HTTP_OK;
 	    rdr = Session_getProp(session, "login_rdr");
