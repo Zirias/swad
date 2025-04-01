@@ -1,4 +1,5 @@
 #include "authenticator.h"
+#include "cred/pamchecker.h"
 #include "handler/login.h"
 #include "handler/root.h"
 #include "httpserver.h"
@@ -14,19 +15,6 @@
 
 static HttpServer *server;
 
-static int checkDummy(void *self, const char *user, const char *pw,
-	char **realname)
-{
-    (void)self;
-    *realname = 0;
-    return !strcmp(user, pw);
-}
-
-static CredentialsChecker dummyChecker = {
-    .check = checkDummy,
-    .destroy = 0
-};
-
 static void prestartup(void *receiver, void *sender, void *args)
 {
     (void)receiver;
@@ -36,8 +24,9 @@ static void prestartup(void *receiver, void *sender, void *args)
     MW_FormData_setValidation(FDV_UTF8_SANITIZE);
     MW_Session_init();
     Authenticator_init();
-    Authenticator_registerChecker("dummy", &dummyChecker);
-    Authenticator_configureRealm(DEFAULT_REALM, "dummy");
+    CredentialsChecker *pamchecker = CredentialsChecker_createPam("system");
+    Authenticator_registerChecker("pam", pamchecker);
+    Authenticator_configureRealm(DEFAULT_REALM, "pam");
 
     HttpServerOpts *opts = HttpServerOpts_create(8080);
     server = HttpServer_create(opts);

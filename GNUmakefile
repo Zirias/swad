@@ -13,3 +13,4 @@ DISTCLEANDIRS=		tools/bin
 include zimk/zimk.mk
 
 $(call zinc, src/bin/swad/swad.mk)
+$(call zinc, src/libexec/swad_pam/swad_pam.mk)
