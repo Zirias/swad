@@ -4,6 +4,7 @@
 #include "httpserver.h"
 #include "middleware/compress.h"
 #include "middleware/cookies.h"
+#include "middleware/csrfprotect.h"
 #include "middleware/formdata.h"
 #include "middleware/pathparser.h"
 #include "middleware/session.h"
@@ -47,6 +48,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     HttpServer_addMiddleware(server, MW_Session);
     HttpServer_addMiddleware(server, MW_PathParser);
     HttpServer_addMiddleware(server, MW_FormData);
+    HttpServer_addMiddleware(server, MW_CSRFProtect);
 
     HttpServer_addRoute(server, "/login", loginHandler, HTTP_GET|HTTP_POST, 0);
     HttpServer_addRoute(server, "/", rootHandler, HTTP_GET, 0);

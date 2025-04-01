@@ -5,6 +5,7 @@
 #include "../http/httprequest.h"
 #include "../http/httpresponse.h"
 #include "../mediatype.h"
+#include "../middleware/csrfprotect.h"
 #include "../middleware/formdata.h"
 #include "../middleware/pathparser.h"
 #include "../middleware/session.h"
@@ -92,6 +93,9 @@ static void showForm(HttpContext *context, const char *realm, const char *rdr)
 	const char *lu = Session_getProp(session, "login_user");
 	if (lu) Template_setStaticVar(tmpl, "USER", lu, TF_HTML);
     }
+    Template_setStaticVar(tmpl, "CSRFNAME", CSRFProtect_name(), TF_NONE);
+    Template_setStaticVar(tmpl, "CSRFTOKEN",
+	    CSRFProtect_token(context), TF_NONE);
     Template_setStaticVar(tmpl, "REALM", realm, TF_HTML);
     Template_setStaticVar(tmpl, "SELF", HttpRequest_path(
 		HttpContext_request(context)), TF_HTML);

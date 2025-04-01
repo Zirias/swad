@@ -37,6 +37,7 @@ input:focus {
     <p>Already logged in as:</p>
     <p><em>%%USER%% (%%REALNAME%%)</em></p>
     <form action="%%SELF%%" method="post" autocomplete="off">
+      <input type="hidden" name="%%CSRFNAME%%" value="%%CSRFTOKEN%%">
       <input type="submit" name="logout" value="logout">
     </form>
   </body>

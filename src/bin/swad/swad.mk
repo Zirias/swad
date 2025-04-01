@@ -17,6 +17,7 @@ swad_MODULES=		authenticator \
 			mediatype \
 			middleware/compress \
 			middleware/cookies \
+			middleware/csrfprotect \
 			middleware/formdata \
 			middleware/pathparser \
 			middleware/session \

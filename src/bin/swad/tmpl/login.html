@@ -35,6 +35,7 @@ input:focus {
   <body>
     <h1>%%REALM%% Login</h1>
     <form action="%%SELF%%" method="post" autocomplete="off">
+      <input type="hidden" name="%%CSRFNAME%%" value="%%CSRFTOKEN%%">
       <input type="text" name="user" placeholder="user name" value="%%USER%%"
 	  maxlength="32" autofocus><br>
       <input type="password" name="pw" placeholder="password"
