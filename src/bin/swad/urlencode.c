@@ -11,7 +11,7 @@
 
 char *urldecode(const char *str, size_t size)
 {
-    size_t outsz = strlen(str);
+    size_t outsz = size;
     size_t outpos = 0;
     size_t inpos = 0;
     char *out = PSC_malloc(outsz);
