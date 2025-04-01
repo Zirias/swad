@@ -6,12 +6,17 @@
 #define DEFAULT_REALM "SWAD"
 
 C_CLASS_DECL(Authenticator);
+C_CLASS_DECL(CredentialsChecker);
 C_CLASS_DECL(User);
 
 C_CLASS_DECL(Session);
 
-typedef char *(*CredentialsChecker)(const char *user, const char *pw)
-    ATTR_NONNULL((1)) ATTR_NONNULL((2));
+struct CredentialsChecker
+{
+    int (*check)(void *self, const char *user, const char *pw, char **realname)
+	CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3)) ATTR_NONNULL((4));
+    void (*destroy)(void *self);
+};
 
 Authenticator *Authenticator_create(Session *session, const char *realm)
     ATTR_RETNONNULL;
@@ -28,7 +33,7 @@ const char *User_realname(const User *user) CMETHOD;
 
 void Authenticator_init(void);
 void Authenticator_registerChecker(
-	const char *name, CredentialsChecker checker)
+	const char *name, CredentialsChecker *checker)
     ATTR_NONNULL((1)) ATTR_NONNULL((2));
 void Authenticator_configureRealm(
 	const char *realm, const char *checker)

@@ -13,11 +13,18 @@
 
 static HttpServer *server;
 
-static char *dummyChecker(const char *user, const char *pw)
+static int checkDummy(void *self, const char *user, const char *pw,
+	char **realname)
 {
-    if (strcmp(user, pw)) return 0;
-    return PSC_copystr(user);
+    (void)self;
+    *realname = 0;
+    return !strcmp(user, pw);
 }
+
+static CredentialsChecker dummyChecker = {
+    .check = checkDummy,
+    .destroy = 0
+};
 
 static void prestartup(void *receiver, void *sender, void *args)
 {
@@ -28,7 +35,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     MW_FormData_setValidation(FDV_UTF8_SANITIZE);
     MW_Session_init();
     Authenticator_init();
-    Authenticator_registerChecker("dummy", dummyChecker);
+    Authenticator_registerChecker("dummy", &dummyChecker);
     Authenticator_configureRealm(DEFAULT_REALM, "dummy");
 
     HttpServerOpts *opts = HttpServerOpts_create(8080);

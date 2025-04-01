@@ -155,13 +155,13 @@ int Authenticator_login(Authenticator *self, const char *user, const char *pw)
     while (!ok && PSC_ListIterator_moveNext(i))
     {
 	pthread_mutex_lock(&checkerlock);
-	CredentialsChecker checker = (CredentialsChecker)PSC_HashTable_get(
+	CredentialsChecker *checker = PSC_HashTable_get(
 		checkers, PSC_ListIterator_current(i));
 	pthread_mutex_unlock(&checkerlock);
 	if (checker)
 	{
-	    char *realname = checker(user, pw);
-	    if (realname)
+	    char *realname = 0;
+	    if (checker->check(checker, user, pw, &realname))
 	    {
 		PSC_HashTable_set(self->authinfo, self->realm,
 			createUser(user, realname), deleteUser);
@@ -199,10 +199,10 @@ void Authenticator_init(void)
 }
 
 void Authenticator_registerChecker(
-	const char *name, CredentialsChecker checker)
+	const char *name, CredentialsChecker *checker)
 {
     pthread_mutex_lock(&checkerlock);
-    PSC_HashTable_set(checkers, name, (void *)checker, 0);
+    PSC_HashTable_set(checkers, name, checker, checker->destroy);
     pthread_mutex_unlock(&checkerlock);
 }
 
