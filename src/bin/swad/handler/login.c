@@ -40,12 +40,18 @@ static void doLogin(HttpContext *context, const char *realm)
 	const char *pw = FormData_single(form, "pw", &len);
 	if (!pw || len < 1 || len > 32) goto done;
 
-	Session_setProp(session, "login_user", PSC_copystr(user), free);
 	Authenticator *auth = Authenticator_create(session, realm);
 	if (Authenticator_login(auth, user, pw))
 	{
 	    status = HTTP_OK;
 	    rdr = Session_getProp(session, "login_rdr");
+	    Session_setProp(session, "login_error", 0, 0);
+	    Session_setProp(session, "login_user", 0, 0);
+	}
+	else
+	{
+	    Session_setProp(session, "login_error", "Invalid credentials", 0);
+	    Session_setProp(session, "login_user", PSC_copystr(user), free);
 	}
 	Authenticator_destroy(auth);
     }
@@ -90,6 +96,8 @@ static void showForm(HttpContext *context, const char *realm, const char *rdr)
     else
     {
 	tmpl = Template_createStatic(tmpl_login_html, tmpl_login_html_sz);
+	const char *le = Session_getProp(session, "login_error");
+	if (le) Template_setStaticVar(tmpl, "ERRMSG", le, TF_HTML);
 	const char *lu = Session_getProp(session, "login_user");
 	if (lu) Template_setStaticVar(tmpl, "USER", lu, TF_HTML);
     }

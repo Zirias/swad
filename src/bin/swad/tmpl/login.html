@@ -30,10 +30,14 @@ input:focus {
   border-color: lightblue;
   outline: none;
 }
+.error {
+  color: red;
+}
 </style>
   </head>
   <body>
     <h1>%%REALM%% Login</h1>
+    <p class="error">%%ERRMSG%%</p>
     <form action="%%SELF%%" method="post" autocomplete="off">
       <input type="hidden" name="%%CSRFNAME%%" value="%%CSRFTOKEN%%">
       <input type="text" name="user" placeholder="user name" value="%%USER%%"
