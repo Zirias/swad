@@ -53,11 +53,13 @@ static void *pamthreadproc(void *arg)
 
     if (!pid)
     {
-	dup2(readfd[1], STDOUT_FILENO);
-	dup2(writefd[0], STDIN_FILENO);
-	close(STDERR_FILENO);
 	close(readfd[0]);
 	close(writefd[1]);
+	dup2(readfd[1], STDOUT_FILENO);
+	if (readfd[1] != STDOUT_FILENO) close(readfd[1]);
+	dup2(writefd[0], STDIN_FILENO);
+	if (writefd[0] != STDIN_FILENO) close (writefd[0]);
+	close(STDERR_FILENO);
 	execl(LIBEXECDIR "/swad_pam", "swad: pam helper", NULL);
     }
 
