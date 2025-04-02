@@ -3,6 +3,7 @@ GEN_BIN2CSTR_args=	$1 $2
 
 swad_VERSION=		0.1
 swad_MODULES=		authenticator \
+			config \
 			base64 \
 			cred/pamchecker \
 			handler/login \
@@ -28,7 +29,9 @@ swad_MODULES=		authenticator \
 			urlencode \
 			utf8 \
 			util
-swad_DEFINES=		-DLIBEXECDIR=\"$(libexecdir)\"
+swad_DEFINES=		-DLIBEXECDIR=\"$(libexecdir)\" \
+			-DRUNSTATEDIR=\"$(runstatedir)\" \
+			-DSYSCONFDIR=\"$(sysconfdir)\"
 swad_LDFLAGS=		-pthread
 swad_PKGDEPS=		posercore \
 			zlib
