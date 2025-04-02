@@ -1,27 +1,70 @@
 #include "root.h"
 
+#include "../authenticator.h"
+#include "../handler/login.h"
 #include "../http/httpcontext.h"
 #include "../http/httprequest.h"
 #include "../http/httpresponse.h"
 #include "../mediatype.h"
 #include "../middleware/pathparser.h"
+#include "../middleware/session.h"
 
+#include <stdio.h>
 #include <string.h>
 
 void rootHandler(HttpContext *context)
 {
-    const char *path = PathParser_path(PathParser_get(context));
+    char responsebuf[4096];
+    HttpResponse *response = 0;
 
-    if (!strcmp("/", path))
+    const PathParser *pathParser = PathParser_get(context);
+    if (!pathParser) goto done;
+
+    if (strcmp("/", PathParser_path(pathParser)))
     {
-	HttpResponse *response = HttpResponse_create(HTTP_OK, MT_HTML);
-	HttpResponse_setTextBody(response, "<html><head><title>"
-		"Hello, World!</title></head><body><h1>"
-		"Hello, World!</h1><p>"
-		"Dummy hello response.</p></body></html>");
-	HttpContext_setResponse(context, response);
+	response = HttpResponse_createError(HTTP_NOTFOUND, 0);
+	goto done;
     }
-    else HttpContext_setResponse(context,
-	    HttpResponse_createError(HTTP_NOTFOUND, 0));
+
+    Session *session = Session_get(context);
+    if (!session) goto done;
+
+    const QueryParam *realmParam = PathParser_param(pathParser, "realm", 0);
+    const char *realm = 0;
+    if (realmParam) realm = QueryParam_value(realmParam);
+    if (!realm || !*realm) realm = DEFAULT_REALM;
+
+    Authenticator *auth = Authenticator_create(session, realm);
+    const User *user = Authenticator_user(auth);
+    Authenticator_destroy(auth);
+
+    if (user)
+    {
+	const char *username = User_username(user);
+	const char *realname = User_realname(user);
+	if (realname)
+	{
+	    snprintf(responsebuf, sizeof responsebuf, "%s\n%s\n",
+		    username, realname);
+	}
+	else
+	{
+	    snprintf(responsebuf, sizeof responsebuf, "%s\n", username);
+	}
+	response = HttpResponse_create(HTTP_OK, MT_TEXT);
+	HttpResponse_setTextBody(response, responsebuf);
+    }
+    else
+    {
+	snprintf(responsebuf, sizeof responsebuf, "%s?realm=%s&rdr=%s",
+		loginHandler_route(), realm,
+		HttpRequest_path(HttpContext_request(context)));
+	response = HttpResponse_createRedirect(HTTP_FORBIDDEN, responsebuf);
+    }
+
+done:
+    if (!response) response = HttpResponse_createError(
+	    HTTP_INTERNALSERVERERROR, 0);
+    HttpContext_setResponse(context, response);
 }
 

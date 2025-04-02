@@ -150,3 +150,8 @@ void loginHandler_setRoute(const char *loginRoute)
     else route = defroute;
 }
 
+const char *loginHandler_route(void)
+{
+    return route;
+}
+
