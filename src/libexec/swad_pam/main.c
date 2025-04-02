@@ -58,6 +58,14 @@ int main(int argc, char **argv)
 	return EXIT_FAILURE;
     }
 
+    int fd = open("/dev/null", O_RDWR);
+    if (fd != STDERR_FILENO)
+    {
+	if (fd < 0 ||
+		dup2(fd, STDERR_FILENO) != STDERR_FILENO) return EXIT_FAILURE;
+	close(fd);
+    }
+
     errno = 0;
     ssize_t rdsz;
     while ((rdsz = read(STDIN_FILENO, buf, sizeof buf - 1)) > 0)
