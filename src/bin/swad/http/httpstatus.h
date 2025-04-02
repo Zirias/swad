@@ -1,6 +1,8 @@
 #ifndef SWAD_HTTPSTATUS_H
 #define SWAD_HTTPSTATUS_H
 
+#include "httpversion.h"
+
 typedef enum HttpStatus {
     HTTP_OK = 200,
     HTTP_CREATED = 201,
@@ -17,5 +19,7 @@ typedef enum HttpStatus {
     HTTP_INTERNALSERVERERROR = 500,
     HTTP_SERVICEUNAVAILABLE = 503
 } HttpStatus;
+
+HttpStatus HttpStatus_downgrade(HttpStatus status, HttpVersion version);
 
 #endif

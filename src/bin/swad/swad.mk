@@ -14,6 +14,7 @@ swad_MODULES=		authenticator \
 			http/httpcontext \
 			http/httprequest \
 			http/httpresponse \
+			http/httpstatus \
 			httpserver \
 			main \
 			mediatype \

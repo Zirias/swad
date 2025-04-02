@@ -213,7 +213,7 @@ void HttpResponse_setAllowHeader(HttpResponse *self, HttpMethod mask)
 
 void HttpResponse_setVersion(HttpResponse *self, HttpVersion version)
 {
-    self->version = version;
+    self->status = HttpStatus_downgrade(self->status, version);
 }
 
 void HttpResponse_setBody(HttpResponse *self, const uint8_t *buf, size_t size)
