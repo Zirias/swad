@@ -109,6 +109,7 @@ static void *pamthreadproc(void *arg)
 	char wrbuf[256];
 	if (sem_wait(&pamThread->request) < 0) break;
 	if (pthread_mutex_lock(&pamThread->lock) != 0) break;
+	pamThread->ok = 0;
 	if (pamThread->stoprq || childExited) break;
 	PSC_Log_fmt(PSC_L_DEBUG, "pamchecker: sending authentication "
 		"request for %s:%s", pamThread->service, pamThread->user);
@@ -128,7 +129,6 @@ static void *pamthreadproc(void *arg)
 	    rdbuf[rdlen] = 0;
 	}
 	if (!strcmp(rdbuf, "1\n")) pamThread->ok = 1;
-	else pamThread->ok = 0;
 	if (sem_post(&pamThread->response) < 0) break;
 	if (pthread_mutex_unlock(&pamThread->lock) != 0) break;
     }
