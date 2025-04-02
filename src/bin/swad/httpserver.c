@@ -30,6 +30,7 @@ typedef struct HttpRoute
 
 struct HttpServer
 {
+    LogLevelCallback loglevel;
     PSC_Server *server;
     HttpRoute *routes;
     HttpHandler *middlewares;
@@ -58,7 +59,8 @@ static void connClosed(void *receiver, void *sender, void *args);
 static HttpHandler getMiddlewareAt(void *owner, size_t pos) ATTR_PURE;
 static void httpResponseSentSingle(void *receiver, void *sender, void *args);
 static void httpResponseSentReuse(void *receiver, void *sender, void *args);
-static void logRequest(HttpContext *context) ATTR_NONNULL((1));
+static void logRequest(HttpServer *self, HttpContext *context)
+    CMETHOD ATTR_NONNULL((1));
 static void pipelineJob(void *arg);
 static void pipelineJobDone(void *receiver, void *sender, void *args);
 static void pipelineCanceledJobDone(void *receiver, void *sender, void *args);
@@ -173,17 +175,26 @@ static HttpHandler getMiddlewareAt(void *owner, size_t pos)
     return self->middlewares[pos];
 }
 
-static void logRequest(HttpContext *context)
+static void logRequest(HttpServer *self, HttpContext *context)
 {
+    char raddr[1024];
+    HttpRequest *request = HttpContext_request(context);
+    HttpStatus status = HttpResponse_status(HttpContext_response(context));
+    PSC_LogLevel level = PSC_L_INFO;
+    if (self->loglevel) level = self->loglevel(request, status);
+    const char *remoteAddr = HttpContext_remoteAddr(context);
+    const Header *fwd = HeaderSet_first(HttpRequest_headers(request),
+	    "X-Forwarded-For");
+    if (fwd)
+    {
+	snprintf(raddr, sizeof raddr, "%s, %s", remoteAddr, Header_value(fwd));
+	remoteAddr = raddr;
+    }
     const char *remoteHost = HttpContext_remoteHost(context);
     if (!remoteHost) remoteHost = "";
-    PSC_Log_fmt(PSC_L_INFO, "http: %u - %s %s HTTP/1.%u - %s [%s]",
-	    HttpResponse_status(HttpContext_response(context)),
-	    HttpRequest_rawMethod(HttpContext_request(context)),
-	    HttpRequest_path(HttpContext_request(context)),
-	    HttpRequest_version(HttpContext_request(context)),
-	    remoteHost,
-	    HttpContext_remoteAddr(context));
+    PSC_Log_fmt(level, "http: %u - %s %s HTTP/1.%u - %s [%s]", status,
+	    HttpRequest_rawMethod(request), HttpRequest_path(request),
+	    HttpRequest_version(request), remoteHost, remoteAddr);
 }
 
 static void pipelineJobDone(void *receiver, void *sender, void *args)
@@ -213,7 +224,7 @@ static void pipelineJobDone(void *receiver, void *sender, void *args)
 	response = HttpResponse_createError(HTTP_INTERNALSERVERERROR, 0);
     }
 
-    logRequest(context);
+    logRequest(self, context);
 
     HeaderSet *headers = HttpResponse_headers(response);
     HttpStatus status = HttpResponse_status(response);
@@ -426,6 +437,11 @@ void HttpServer_addMiddleware(HttpServer *self, HttpHandler handler)
 		self->middlewarescapa * sizeof *self->middlewares);
     }
     self->middlewares[self->middlewarescount++] = handler;
+}
+
+void HttpServer_setLogLevelCallback(HttpServer *self, LogLevelCallback cb)
+{
+    self->loglevel = cb;
 }
 
 void HttpServer_destroy(HttpServer *self)

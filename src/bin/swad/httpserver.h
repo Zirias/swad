@@ -2,15 +2,20 @@
 #define SWAD_HTTPSERVER_H
 
 #include "http/httpmethod.h"
+#include "http/httpstatus.h"
 
 #include <poser/decl.h>
+#include <poser/core/log.h>
 
+C_CLASS_DECL(HttpRequest);
 C_CLASS_DECL(HttpServer);
 C_CLASS_DECL(HttpServerOpts);
 C_CLASS_DECL(HttpContext);
 
 typedef void (*HttpHandler)(HttpContext *context) ATTR_NONNULL((1));
 typedef HttpMethod (*HttpMethodCheck)(const char *rawPath) ATTR_NONNULL((1));
+typedef PSC_LogLevel (*LogLevelCallback)(const HttpRequest *request,
+	HttpStatus status) ATTR_NONNULL((1));
 
 HttpServerOpts *HttpServerOpts_create(int port)
     ATTR_RETNONNULL;
@@ -29,6 +34,8 @@ void HttpServer_addRoute(HttpServer *self, const char *prefix,
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
 void HttpServer_addMiddleware(HttpServer *self, HttpHandler handler)
     CMETHOD ATTR_NONNULL((2));
+void HttpServer_setLogLevelCallback(HttpServer *self, LogLevelCallback cb)
+    CMETHOD;
 void HttpServer_destroy(HttpServer *self);
 
 #endif

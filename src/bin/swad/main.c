@@ -3,6 +3,8 @@
 #include "cred/pamchecker.h"
 #include "handler/login.h"
 #include "handler/root.h"
+#include "http/httprequest.h"
+#include "http/httpstatus.h"
 #include "httpserver.h"
 #include "middleware/compress.h"
 #include "middleware/cookies.h"
@@ -16,6 +18,14 @@
 #include <string.h>
 
 static HttpServer *server;
+
+static PSC_LogLevel logLevelFor(const HttpRequest *request, HttpStatus status)
+{
+    if (status != HTTP_OK) return PSC_L_INFO;
+    const char *path = HttpRequest_path(request);
+    if (path[0] == '/' && (!path[1] || path[1] == '?')) return PSC_L_DEBUG;
+    return PSC_L_INFO;
+}
 
 static void prestartup(void *receiver, void *sender, void *args)
 {
@@ -66,6 +76,8 @@ static void prestartup(void *receiver, void *sender, void *args)
 
     HttpServer_addRoute(server, "/login", loginHandler, HTTP_GET|HTTP_POST, 0);
     HttpServer_addRoute(server, "/", rootHandler, HTTP_GET, 0);
+
+    HttpServer_setLogLevelCallback(server, logLevelFor);
 }
 
 static void shutdown(void *receiver, void *sender, void *args)
