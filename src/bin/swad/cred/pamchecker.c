@@ -1,20 +1,24 @@
-#define _POSIX_C_SOURCE 200112L
+#define _POSIX_C_SOURCE 200809L
 
 #include "pamchecker.h"
 
 #include "../authenticator.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <pthread.h>
 #include <poser/core/log.h>
 #include <poser/core/util.h>
 #include <pwd.h>
+#include <semaphore.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#define ERR_EXEC 127
 
 typedef struct PamChecker
 {
@@ -27,11 +31,10 @@ typedef struct PamThread
     const char *service;
     const char *user;
     const char *pw;
-    pthread_mutex_t startlock;
-    pthread_mutex_t donelock;
-    pthread_cond_t start;
-    pthread_cond_t done;
+    pthread_mutex_t lock;
     pthread_t handle;
+    sem_t request;
+    sem_t response;
     int refcnt;
     int stoprq;
     int ok;
@@ -39,17 +42,50 @@ typedef struct PamThread
 
 static PamThread *pamThread;
 
+static volatile sig_atomic_t childExited;
+
+static void handlechild(int signum)
+{
+    if (signum == SIGCHLD) childExited = 1;
+}
+
 static void *pamthreadproc(void *arg)
 {
     (void)arg;
 
-    pthread_mutex_lock(&pamThread->startlock);
+    struct sigaction handler;
+    memset(&handler, 0, sizeof handler);
+    sigemptyset(&handler.sa_mask);
+    sigaddset(&handler.sa_mask, SIGCHLD);
+    handler.sa_handler = handlechild;
+    if (sigaction(SIGCHLD, &handler, 0) < 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamchecker: Cannot install SIGCHLD handler");
+	goto done;
+    }
+    if (pthread_sigmask(SIG_UNBLOCK, &handler.sa_mask, 0) != 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamchecker: Cannot unblock SIGCHLD");
+	goto done;
+    }
 
     int readfd[2];
     int writefd[2];
-    pipe(readfd);
-    pipe(writefd);
-    pid_t pid = fork();
+    if (pipe(readfd) < 0 || pipe(writefd) < 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamchecker: Error creating pipes");
+	goto done;
+    }
+    pid_t pid;
+    if ((pid = fork()) < 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamchecker: Cannot fork child process");
+	close(readfd[0]);
+	close(readfd[1]);
+	close(writefd[0]);
+	close(writefd[1]);
+	goto done;
+    }
 
     if (!pid)
     {
@@ -61,45 +97,75 @@ static void *pamthreadproc(void *arg)
 	if (writefd[0] != STDIN_FILENO) close (writefd[0]);
 	close(STDERR_FILENO);
 	execl(LIBEXECDIR "/swad_pam", "swad: pam helper", NULL);
+	exit(ERR_EXEC);
     }
 
     close(readfd[1]);
     close(writefd[0]);
 
-    while (!pamThread->stoprq)
+    while (!childExited)
     {
 	char rdbuf[16];
 	char wrbuf[256];
-	pthread_cond_wait(&pamThread->start, &pamThread->startlock);
-	if (pamThread->stoprq) break;
+	if (sem_wait(&pamThread->request) < 0) break;
+	if (pthread_mutex_lock(&pamThread->lock) != 0) break;
+	if (pamThread->stoprq || childExited) break;
 	PSC_Log_fmt(PSC_L_DEBUG, "pamchecker: sending authentication "
 		"request for %s:%s", pamThread->service, pamThread->user);
 	int wrlen = snprintf(wrbuf, sizeof wrbuf, "%s:%s\n",
 		pamThread->service, pamThread->user);
-	write(writefd[1], wrbuf, wrlen);
+	if (write(writefd[1], wrbuf, wrlen) < 0) break;
 	ssize_t rdlen = read(readfd[0], rdbuf, sizeof rdbuf - 1);
+	if (rdlen < 0) break;
 	rdbuf[rdlen] = 0;
 	if (!strcmp(rdbuf, "P\n"))
 	{
 	    PSC_Log_msg(PSC_L_DEBUG, "pamchecker: sending password");
 	    wrlen = snprintf(wrbuf, sizeof wrbuf, "%s\n", pamThread->pw);
-	    write(writefd[1], wrbuf, wrlen);
+	    if (write(writefd[1], wrbuf, wrlen) < 0) break;
 	    rdlen = read(readfd[0], rdbuf, sizeof rdbuf - 1);
+	    if (rdlen < 0) break;
 	    rdbuf[rdlen] = 0;
 	}
-	pthread_mutex_lock(&pamThread->donelock);
 	if (!strcmp(rdbuf, "1\n")) pamThread->ok = 1;
 	else pamThread->ok = 0;
-	pthread_cond_signal(&pamThread->done);
-	pthread_mutex_unlock(&pamThread->donelock);
+	if (sem_post(&pamThread->response) < 0) break;
+	if (pthread_mutex_unlock(&pamThread->lock) != 0) break;
     }
 
+    pthread_mutex_unlock(&pamThread->lock);
     close(readfd[0]);
     close(writefd[1]);
 
     int status;
     waitpid(pid, &status, 0);
+    if (WIFSIGNALED(status))
+    {
+	PSC_Log_fmt(PSC_L_ERROR, "pamchecker: Child process terminated "
+		"by signal %d (%s)", WTERMSIG(status),
+		strsignal(WTERMSIG(status)));
+    }
+    else if (WIFEXITED(status))
+    {
+	int exitst = WEXITSTATUS(status);
+	if (exitst == ERR_EXEC)
+	{
+	    PSC_Log_msg(PSC_L_ERROR, "pamchecker: Cannot launch helper "
+		    LIBEXECDIR "/swad_pam");
+	}
+	else if (exitst != 0)
+	{
+	    PSC_Log_fmt(PSC_L_ERROR, "pamchecker: Child process exited with "
+		    "status %d", exitst);
+	}
+    }
+    else
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamchecker: Child process died in an "
+		"unexpected way");
+    }
 
+done:
     return 0;
 }
 
@@ -112,12 +178,29 @@ static void PamThread_create(void)
     sigset_t blockmask;
     sigset_t mask;
     sigfillset(&blockmask);
-    sigprocmask(SIG_BLOCK, &blockmask, &mask);
-    pthread_mutex_init(&pamThread->startlock, 0);
-    pthread_cond_init(&pamThread->start, 0);
-    pthread_mutex_init(&pamThread->donelock, 0);
-    pthread_cond_init(&pamThread->done, 0);
-    pthread_create(&pamThread->handle, 0, pamthreadproc, 0);
+    if (sigprocmask(SIG_BLOCK, &blockmask, &mask) < 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamchecker: Cannot set signal block mask");
+	goto done;
+    }
+    if (pthread_mutex_init(&pamThread->lock, 0) != 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamchecker: Cannot initialize mutex");
+	goto restore;
+    }
+    if (sem_init(&pamThread->request, 0, 0) < 0
+	    || sem_init(&pamThread->response, 0, 0) < 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamchecker: Cannot initialize semaphore");
+	goto restore;
+    }
+    if (pthread_create(&pamThread->handle, 0, pamthreadproc, 0) != 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR,
+		"pamchecker: Cannot launch controlling thread");
+    }
+restore:
+    sigaddset(&mask, SIGCHLD); /* keep SIGCHLD blocked on all other threads */
     sigprocmask(SIG_SETMASK, &mask, 0);
 done:
     ++pamThread->refcnt;
@@ -129,15 +212,15 @@ static void PamThread_destroy(void)
     if (--pamThread->refcnt) return;
     if (pthread_kill(pamThread->handle, 0) >= 0)
     {
+	pthread_mutex_lock(&pamThread->lock);
 	pamThread->stoprq = 1;
-	pthread_cond_signal(&pamThread->start);
-	pthread_mutex_unlock(&pamThread->startlock);
+	sem_post(&pamThread->request);
+	pthread_mutex_unlock(&pamThread->lock);
     }
     pthread_join(pamThread->handle, 0);
-    pthread_cond_destroy(&pamThread->done);
-    pthread_mutex_destroy(&pamThread->donelock);
-    pthread_cond_destroy(&pamThread->start);
-    pthread_mutex_destroy(&pamThread->startlock);
+    sem_destroy(&pamThread->response);
+    sem_destroy(&pamThread->request);
+    pthread_mutex_destroy(&pamThread->lock);
     free(pamThread);
     pamThread = 0;
 }
@@ -155,16 +238,47 @@ static int check(void *obj, const char *user, const char *pw, char **realname)
 {
     *realname = 0;
     PamChecker *self = obj;
-    pthread_mutex_lock(&pamThread->startlock);
+    if (pthread_kill(pamThread->handle, 0) == ESRCH)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamcheck: Authentication is unavailable "
+		"because either the child process or the controlling thread "
+		"died. Restarting swad is advised.");
+	return 0;
+    }
+    if (pthread_mutex_lock(&pamThread->lock) != 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamcheck: Cannot lock mutex");
+	return 0;
+    }
     pamThread->service = self->service;
     pamThread->user = user;
     pamThread->pw = pw;
-    pthread_cond_signal(&pamThread->start);
-    pthread_mutex_unlock(&pamThread->startlock);
-    pthread_mutex_lock(&pamThread->donelock);
-    pthread_cond_wait(&pamThread->done, &pamThread->donelock);
-    pthread_mutex_unlock(&pamThread->donelock);
+    if (sem_post(&pamThread->request) < 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamcheck: Cannot signal controlling thread");
+	return 0;
+    }
+    if (pthread_mutex_unlock(&pamThread->lock) != 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamcheck: Cannot unlock mutex");
+	return 0;
+    }
+    if (sem_wait(&pamThread->response) < 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamcheck: Error waiting for result");
+	return 0;
+    }
+    if (pthread_mutex_lock(&pamThread->lock) != 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamcheck: Cannot lock mutex");
+	return 0;
+    }
     int ok = pamThread->ok;
+    if (pthread_mutex_unlock(&pamThread->lock) != 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "pamcheck: Cannot unlock mutex");
+	return 0;
+    }
     if (ok)
     {
 	struct passwd pwent;
