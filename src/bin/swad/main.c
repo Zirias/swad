@@ -84,6 +84,7 @@ int main(int argc, char **argv)
     if (Config_init(argc, argv) < 0) return EXIT_FAILURE;
     PSC_RunOpts_init(Config_pidfile());
     PSC_RunOpts_enableDefaultLogging("swad");
+    PSC_RunOpts_runas(Config_uid(), Config_gid());
     PSC_Event_register(PSC_Service_prestartup(), 0, prestartup, 0);
     PSC_Event_register(PSC_Service_shutdown(), 0, shutdown, 0);
     return PSC_Service_run();

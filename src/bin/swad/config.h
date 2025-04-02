@@ -24,6 +24,9 @@ const CfgRealm *Config_realm(size_t num);
 const char *CfgRealm_name(const CfgRealm *self) CMETHOD ATTR_RETNONNULL;
 const char *CfgRealm_checker(const CfgRealm *self, size_t num) CMETHOD;
 
+long Config_uid(void);
+long Config_gid(void);
+
 const char *Config_pidfile(void) ATTR_RETNONNULL;
 
 void Config_done(void);

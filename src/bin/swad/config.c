@@ -1,8 +1,11 @@
 #include "config.h"
 
 #include <ctype.h>
+#include <errno.h>
+#include <grp.h>
 #include <poser/core/log.h>
 #include <poser/core/util.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,10 +46,23 @@ static CfgRealm **realms;
 
 static const char *cfgfile;
 static const char *pidfile;
+static long uid = -1;
+static long gid = -1;
+
 static unsigned lineno;
 static CfgSection section;
 
 #define skipws(p) while (isspace((unsigned char)*(p))) ++(p)
+
+static int longArg(long *setting, char *op)
+{
+    char *endp;
+    errno = 0;
+    long val = strtol(op, &endp, 10);
+    if (errno == ERANGE || *endp) return -1;
+    *setting = val;
+    return 0;
+}
 
 static int readKeyValue(char *lp, char **key, char **value)
 {
@@ -151,6 +167,56 @@ static void readRealm(char *lp)
     realms[realms_count++] = realm;
 }
 
+static void readOption(char *lp)
+{
+    char *key;
+    char *value;
+    if (!readKeyValue(lp, &key, &value)) return;
+
+    if (!strcmp(key, "user"))
+    {
+	struct passwd *p;
+	if (longArg(&uid, value) < 0)
+	{
+	    if (!(p = getpwnam(value))) goto uiderr;
+	    uid = p->pw_uid;
+	}
+	else if (!(p = getpwuid(uid)))
+	{
+	    uid = -1;
+	    goto uiderr;
+	}
+	if (gid == -1) gid = p->pw_gid;
+	return;
+uiderr:
+	PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown user `%s', "
+		"ignoring", cfgfile, lineno, value);
+	return;
+    }
+    if (!strcmp(key, "group"))
+    {
+	struct group *g;
+	if (longArg(&gid, value) < 0)
+	{
+	    if (!(g = getgrnam(value))) goto giderr;
+	    gid = g->gr_gid;
+	}
+	else if (!(g = getgrgid(gid)))
+	{
+	    gid = -1;
+	    goto giderr;
+	}
+	return;
+giderr:
+	PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown group `%s', "
+		"ignoring", cfgfile, lineno, value);
+	return;
+    }
+
+    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown global option `%s', "
+	    "ignoring", cfgfile, lineno, key);
+}
+
 static CfgSection readSection(char *lp)
 {
     ++lp;
@@ -212,7 +278,7 @@ static void readConfigFile(FILE *f)
 	else switch(section)
 	{
 	    case CS_INVALID:	break;
-	    case CS_GLOBAL:	break;
+	    case CS_GLOBAL:	readOption(lp); break;
 	    case CS_CHECKERS:	readChecker(lp); break;
 	    case CS_REALMS:	readRealm(lp); break;
 	}
@@ -286,6 +352,16 @@ const char *CfgRealm_checker(const CfgRealm *self, size_t num)
     return self->checkers[num];
 }
 
+long Config_uid(void)
+{
+    return uid;
+}
+
+long Config_gid(void)
+{
+    return gid;
+}
+
 const char *Config_pidfile(void)
 {
     return pidfile;
@@ -323,5 +399,7 @@ void Config_done(void)
     checkers_capa = 0;
     realms = 0;
     checkers = 0;
+    uid = -1;
+    gid = -1;
 }
 
