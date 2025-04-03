@@ -228,7 +228,7 @@ static void pipelineJobDone(void *receiver, void *sender, void *args)
 
     HeaderSet *headers = HttpResponse_headers(response);
     HttpStatus status = HttpResponse_status(response);
-    if (HttpContext_reuseConnection(context)
+    if (conn && HttpContext_reuseConnection(context)
 	    && status != HTTP_BADREQUEST && status != HTTP_TOOMANYREQUESTS
 	    && status < HTTP_INTERNALSERVERERROR)
     {
@@ -240,9 +240,10 @@ static void pipelineJobDone(void *receiver, void *sender, void *args)
     }
     else
     {
-        HeaderSet_set(headers, Header_create("Connection", "close"));
-	PSC_Event_register(HttpResponse_sent(response), 0,
+	HeaderSet_set(headers, Header_create("Connection", "close"));
+	if (conn) PSC_Event_register(HttpResponse_sent(response), 0,
 		httpResponseSentSingle, 0);
+	else httpResponseSentSingle(0, response, 0);
 	HttpContext_destroy(context);
 	HttpRequest_deleteLater(req);
     }
@@ -381,6 +382,11 @@ void HttpServerOpts_enableTls(HttpServerOpts *self,
 	const char *certfile, const char *keyfile)
 {
     PSC_TcpServerOpts_enableTls(self->serverOpts, certfile, keyfile);
+}
+
+void HttpServerOpts_numericHosts(HttpServerOpts *self)
+{
+    PSC_TcpServerOpts_numericHosts(self->serverOpts);
 }
 
 void HttpServerOpts_destroy(HttpServerOpts *self)

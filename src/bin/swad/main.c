@@ -64,6 +64,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     }
 
     HttpServerOpts *opts = HttpServerOpts_create(8080);
+    HttpServerOpts_numericHosts(opts);
     server = HttpServer_create(opts);
     HttpServerOpts_destroy(opts);
 

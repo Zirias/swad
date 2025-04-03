@@ -24,6 +24,7 @@ void HttpServerOpts_bind(HttpServerOpts *self, const char *bindhost)
 void HttpServerOpts_enableTls(HttpServerOpts *self,
 	const char *certfile, const char *keyfile)
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
+void HttpServerOpts_numericHosts(HttpServerOpts *self) CMETHOD;
 void HttpServerOpts_destroy(HttpServerOpts *self);
 
 HttpServer *HttpServer_create(const HttpServerOpts *opts)
