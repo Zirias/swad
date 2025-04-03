@@ -20,6 +20,8 @@ HeaderIterator *HeaderSet_any(const HeaderSet *self, const char *headerName)
     CMETHOD ATTR_NONNULL((2)) ATTR_RETNONNULL;
 const Header *HeaderSet_first(const HeaderSet *self, const char *headerName)
     CMETHOD ATTR_NONNULL((2));
+const Header *HeaderSet_single(const HeaderSet *self, const char *headerName)
+    CMETHOD ATTR_NONNULL((2));
 uint16_t HeaderSet_size(const HeaderSet *self) CMETHOD ATTR_PURE;
 void HeaderSet_destroy(HeaderSet *self);
 

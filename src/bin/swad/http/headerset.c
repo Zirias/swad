@@ -178,6 +178,31 @@ const Header *HeaderSet_first(const HeaderSet *self, const char *headerName)
     return header;
 }
 
+const Header *HeaderSet_single(const HeaderSet *self, const char *headerName)
+{
+    char *key = lowerstr(headerName);
+    uint8_t hashval = hash(key, HSHT_BITS);
+
+    const Header *header = 0;
+    for (HeaderSetEntry *entry = self->buckets[hashval];
+	    entry; entry = entry->next)
+    {
+	if (!strcmp(key, entry->key))
+	{
+	    if (!header) header = entry->header;
+	    else
+	    {
+		header = 0;
+		break;
+	    }
+	}
+    }
+
+    free(key);
+    return header;
+}
+
+
 uint16_t HeaderSet_size(const HeaderSet *self)
 {
     return self->size;
