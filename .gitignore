@@ -29,3 +29,4 @@ defaults.mk
 /tools/*/dist/
 /tools/bin/
 *.html.h
+*.conf.sample

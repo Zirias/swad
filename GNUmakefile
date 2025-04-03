@@ -1,4 +1,4 @@
-USES=	gen pkgconfig
+USES=	gen pkgconfig sub
 
 SUBBUILD=		BIN2CSTR
 BIN2CSTR_TARGET=	tools/bin/bin2cstr

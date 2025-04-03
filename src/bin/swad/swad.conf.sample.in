@@ -1,0 +1,90 @@
+# ============================================================================
+# swad example configuration file
+# for swad v%%VERSION%%
+# ============================================================================
+
+# Global service settings.
+#
+# The section header [global] can be left out, it's the default when starting
+# to parse the configuration.
+#
+[global]
+
+# Run as the following user.
+#
+# Can be a user name or a uid number, only works when starting as root.
+# The default setting of -1 means don't attempt to switch to a different user.
+#
+# Hint: Don't use nobody, it has special meaning e.g. for NFS.
+#
+; user = -1
+
+# Run as the following group.
+#
+# Can be a group name or a gid number, only works when starting as root.
+# The default setting of -1 means use the primary group of the configured
+# user, or don't attempt any change when user is also -1.
+#
+; group = -1
+
+# Location of the pid file.
+#
+# Use a pidfile in this location when running as a daemon.
+#
+; pidfile = %%RUNSTATEDIR%%/swad.pid
+
+# Credential checkers.
+#
+# In this section, named modules for checking user credentials can be
+# configured, along with their arguments.
+#
+# The generic syntax is
+#
+#   <name> = <module>:<arg_1>[:<arg_2>[...:<arg_n>]]
+#
+# Available checkers:
+#
+# ,------------,-------------------------------------------------------------.
+# | module     | description                                                 |
+# >------------+-------------------------------------------------------------<
+# | pam        | Authenticate with PAM.                                      |
+# |            | This module uses a child process that keeps running as the  |
+# |            | user initially starting swad. So it can authenticate with   |
+# |            | PAM modules like pam_unix.so requiring superuser            |
+# |            | privileges, if swad is started as root.                     |
+# |            |                                                             |
+# |            | arg_1:   The PAM service name (required)                    |
+# `------------^-------------------------------------------------------------'
+#
+# Example:
+#
+# [checkers]
+# pam_system = pam:system
+#
+[checkers]
+;
+
+# Authentication realms.
+#
+# This section cotains realms for authentication. A realm is configured as a
+# list of checkers which are allowed to successfully authenticate a user for
+# the realm. The checkers are tried in the order they are given.
+#
+# The generic syntax is
+#
+#   <name> = <checker_1>[:checker_2>[...:<checker_n>]]
+#
+# A realm can be requested by the query parameter "realm" (like in
+# "http://localhost:8080/login?realm=foo") or, for example by a reverse proxy,
+# by setting the custom header "X-SWAD-Realm". If no specific realm is
+# requested, swad uses a default realm named SWAD, so configure this one if
+# you intend to use it.
+#
+# Example:
+#
+# [realms]
+# MySecretService = pam_system
+#
+[realms]
+; SWAD = dummy
+

@@ -41,4 +41,9 @@ swad_TMPL=		login \
 swad_GEN=		BIN2CSTR
 swad_BIN2CSTR_FILES=	$(foreach l,$(swad_TMPL),tmpl/$l.html.h:tmpl/$l.html)
 
+swad_SUB_FILES=		swad.conf.sample
+swad_SUB_LIST=		"RUNSTATEDIR=$(runstatedir)"
+swad_EXTRADIRS=		sysconf
+swad_sysconf_FILES=	swad.conf.sample
+
 $(call binrules,swad)
