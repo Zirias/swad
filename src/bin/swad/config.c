@@ -33,21 +33,37 @@ struct CfgRealm
     char *checkers[];
 };
 
+struct CfgServer
+{
+    char *name;
+    char *tlsCert;
+    char *tlsKey;
+    char **listen;
+    size_t nlisten;
+    PSC_Proto proto;
+    int port;
+    int tls;
+};
+
 typedef enum CfgSection
 {
     CS_INVALID,
     CS_GLOBAL,
     CS_CHECKERS,
-    CS_REALMS
+    CS_REALMS,
+    CS_SERVER
 } CfgSection;
 
 static size_t checkers_count;
 static size_t checkers_capa;
 static size_t realms_count;
 static size_t realms_capa;
+static size_t servers_count;
+static size_t servers_capa;
 
 static CfgChecker **checkers;
 static CfgRealm **realms;
+static CfgServer **servers;
 
 static const char *cfgfile;
 static char *cfg_pidfile;
@@ -60,6 +76,7 @@ static int verbose = 0;
 
 static unsigned lineno;
 static CfgSection section;
+static CfgServer *server;
 
 #define skipws(p) while (isspace((unsigned char)*(p))) ++(p)
 
@@ -69,6 +86,16 @@ static int longArg(long *setting, const char *op)
     errno = 0;
     long val = strtol(op, &endp, 10);
     if (errno == ERANGE || *endp) return -1;
+    *setting = val;
+    return 0;
+}
+
+static int intArg(int *setting, const char *op, int min, int max, int base)
+{
+    char *endp;
+    errno = 0;
+    long val = strtol(op, &endp, base);
+    if (errno == ERANGE || *endp || val < min || val > max) return -1;
     *setting = val;
     return 0;
 }
@@ -117,6 +144,43 @@ error:
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] malformed line, ignoring",
 	    cfgfile, lineno);
     return 0;
+}
+
+static CfgServer *getServer(const char *name)
+{
+    if (name && !*name)
+    {
+	PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] empty server name is not "
+		"allowed, assuming the default server", cfgfile, lineno);
+	name = 0;
+    }
+
+    CfgServer *s = 0;
+    for (size_t i = 0; i < servers_count; ++i)
+    {
+	if ((!name && !servers[i]->name) ||
+		(servers[i]->name && !strcmp(name, servers[i]->name)))
+	{
+	    s = servers[i];
+	    break;
+	}
+    }
+
+    if (!s)
+    {
+	s = PSC_malloc(sizeof *s);
+	memset(s, 0, sizeof *s);
+	if (name) s->name = PSC_copystr(name);
+	s->port = 8080;
+	if (servers_count == servers_capa)
+	{
+	    servers_capa += 8;
+	    servers = PSC_realloc(servers, servers_capa * sizeof *servers);
+	}
+	servers[servers_count++] = s;
+    }
+
+    return s;
 }
 
 static void readChecker(char *lp)
@@ -197,6 +261,59 @@ static void readRealm(char *lp)
     realms[realms_count++] = realm;
 }
 
+static void readServer(char *lp)
+{
+    char *key;
+    char *value;
+    if (!readKeyValue(lp, &key, &value)) return;
+
+    if (!strcmp(key, "port"))
+    {
+	if (intArg(&server->port, value, 1, 65535, 10) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "listen"))
+    {
+	server->listen = PSC_realloc(server->listen,
+		(server->nlisten + 1) * sizeof *server->listen);
+	server->listen[server->nlisten++] = PSC_copystr(value);
+	return;
+    }
+    if (!strcmp(key, "proto"))
+    {
+	if (!strcasecmp(value, "any")) server->proto = PSC_P_ANY;
+	else if (!strcasecmp(value, "ipv4")) server->proto = PSC_P_IPv4;
+	else if (!strcasecmp(value, "ipv6")) server->proto = PSC_P_IPv6;
+	else goto inval;
+	return;
+    }
+    if (!strcmp(key, "tls"))
+    {
+	if (boolArg(&server->tls, value) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "tls_cert_file"))
+    {
+	free(server->tlsCert);
+	server->tlsCert = PSC_copystr(value);
+	return;
+    }
+    if (!strcmp(key, "tls_key_file"))
+    {
+	free(server->tlsKey);
+	server->tlsKey = PSC_copystr(value);
+	return;
+    }
+
+    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown server option `%s', "
+	    "ignoring", cfgfile, lineno, key);
+    return;
+
+inval:
+    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] invalid setting `%s' for %s, "
+	    "ignoring", cfgfile, lineno, value, key);
+}
+
 static int parseUser(const char *str)
 {
     struct passwd *p;
@@ -264,8 +381,8 @@ static void readOption(char *lp)
     {
 	if (resolveHosts < 0 && boolArg(&resolveHosts, value) < 0)
 	{
-	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] invalid setting `%s', "
-		    "ignoring", cfgfile, lineno, value);
+	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] invalid setting `%s'"
+		    "for %s, ignoring", cfgfile, lineno, value, key);
 	}
 	return;
     }
@@ -292,7 +409,17 @@ static CfgSection readSection(char *lp)
     if (!strcmp(start, "global")) return CS_GLOBAL;
     if (!strcmp(start, "checkers")) return CS_CHECKERS;
     if (!strcmp(start, "realms")) return CS_REALMS;
+    if (!strncmp(start, "server", sizeof "server" - 1))
+    {
+	char *name = start + (sizeof "server" - 1);
+	if (*name == ':') *name++ = 0;
+	else if (!*name) name = 0;
+	else goto unknown;
+	server = getServer(name);
+	return CS_SERVER;
+    }
 
+unknown:
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown section `%s', "
 	    "ignoring the following values", cfgfile, lineno, start);
     return CS_INVALID;
@@ -338,6 +465,7 @@ static void readConfigFile(FILE *f)
 	    case CS_GLOBAL:	readOption(lp); break;
 	    case CS_CHECKERS:	readChecker(lp); break;
 	    case CS_REALMS:	readRealm(lp); break;
+	    case CS_SERVER:	readServer(lp); break;
 	}
     }
     
@@ -503,6 +631,7 @@ int Config_init(int argc, char **argv)
     (void)argc;
     (void)argv;
 
+    server = getServer(0);
     int rc = readArguments(argc, argv);
     if (!cfgfile) cfgfile = DEFCONFFILE;
     return rc;
@@ -619,14 +748,32 @@ void Config_done(void)
     }
     free(checkers);
 
+    for (size_t i = 0; i < servers_count; ++i)
+    {
+	CfgServer *s = servers[i];
+	for (size_t j = 0; j < s->nlisten; ++j)
+	{
+	    free(s->listen[j]);
+	}
+	free(s->tlsKey);
+	free(s->tlsCert);
+	free(s->listen);
+	free(s->name);
+	free(s);
+    }
+    free(servers);
+
     free(cfg_pidfile);
 
     realms_count = 0;
     realms_capa = 0;
     checkers_count = 0;
     checkers_capa = 0;
+    servers_count = 0;
+    servers_capa = 0;
     realms = 0;
     checkers = 0;
+    servers = 0;
     uid = -1;
     gid = -1;
     cfg_pidfile = 0;

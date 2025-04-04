@@ -39,6 +39,56 @@
 # host.
 ; resolveHosts = off
 
+# ============================================================================
+
+# Server(s).
+#
+# Each [server] section configures one HTTP server. To distinguish multiple
+# servers, all but one must have an additional name given after a colon,
+# for example [server:foo].
+#
+# Example:
+#
+# [server:tls]
+# tls = on
+# tls_cert_file = /etc/ssl/cert/swad.crt
+# tls_key_file = /etc/ssl/private/swad.key
+# port = 8443
+#
+[server]
+
+# The port number to listen on.
+; port = 8080
+
+# The host name or IP addresses to listen on.
+#
+# Can be given multiple times. If not given, the default behavior is to
+# listen an all available interfaces.
+#
+; listen =
+
+# The IP protocol version to use.
+#
+# Can be one of "any", "ipv4" or "ipv6".
+#
+; proto = any
+
+# Whether to enable TLS for that server.
+#
+# If enabled, both tls_cert_file and tls_key_file must be given.
+#
+; tls = off
+
+# File containing the server TLS certificate.
+#
+; tls_cert_file =
+
+# File containing the private key for the TLS certificate.
+#
+; tls_key_file =
+
+# ============================================================================
+
 # Credential checkers.
 #
 # In this section, named modules for checking user credentials can be
@@ -69,6 +119,8 @@
 #
 [checkers]
 ;
+
+# ============================================================================
 
 # Authentication realms.
 #
