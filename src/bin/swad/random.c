@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <poser/core/log.h>
 #include <poser/core/util.h>
+#include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -15,8 +16,11 @@
 
 static uint64_t prng(void)
 {
+    static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
     static int seeded = 0;
     static uint64_t s[4] = { 0 };
+
+    pthread_mutex_lock(&mutex);
 
     if (!seeded)
     {
@@ -33,6 +37,8 @@ static uint64_t prng(void)
     s[0] ^= s[3];
     s[2] ^= tmp;
     s[3] = (s[3]<<45) | (s[3]>>19);
+
+    pthread_mutex_unlock(&mutex);
 
     return num;
 }
