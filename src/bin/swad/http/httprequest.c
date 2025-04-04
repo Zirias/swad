@@ -170,7 +170,6 @@ static void dataReceived(void *receiver, void *sender, void *args)
 		     self->body = PSC_malloc(length);
 		     self->recvState = RRS_BODY;
 		     PSC_Connection_receiveBinary(conn, 0);
-		     return;
 		}
 		else
 		{
@@ -190,9 +189,9 @@ static void dataReceived(void *receiver, void *sender, void *args)
 		    memcpy(self->hdrval, line, linep - line);
 		    self->hdrval[linep - line] = 0;
 		    self->hdrvalpos = linep - line;
-		    return;
 		}
 	    }
+	    return;
 
 	case RRS_BODY:
 	    bodychunk = PSC_EADataReceived_size(dra);
