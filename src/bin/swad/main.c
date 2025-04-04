@@ -144,12 +144,12 @@ static void shutdown(void *receiver, void *sender, void *args)
 int main(int argc, char **argv)
 {
     if (Config_init(argc, argv) < 0) return EXIT_FAILURE;
-    PSC_RunOpts_enableDefaultLogging("swad");
     PSC_Log_setMaxLogLevel(Config_verbose() ? PSC_L_DEBUG : PSC_L_INFO);
+    PSC_Log_setFileLogger(stderr);
     Config_readConfigFile();
 
     PSC_RunOpts_init(Config_pidfile());
-    PSC_Log_setMaxLogLevel(Config_verbose() ? PSC_L_DEBUG : PSC_L_INFO);
+    PSC_RunOpts_enableDefaultLogging("swad");
     PSC_RunOpts_runas(Config_uid(), Config_gid());
     if (Config_foreground()) PSC_RunOpts_foreground();
     PSC_Event_register(PSC_Service_prestartup(), 0, prestartup, 0);
