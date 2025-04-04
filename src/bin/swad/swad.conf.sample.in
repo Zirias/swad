@@ -33,6 +33,12 @@
 #
 ; pidfile = %%RUNSTATEDIR%%/swad.pid
 
+# Resolve remote hosts
+#
+# Determines whether an attempt is made to resolve the hostname of a remote
+# host.
+; resolveHosts = off
+
 # Credential checkers.
 #
 # In this section, named modules for checking user credentials can be

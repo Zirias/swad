@@ -33,6 +33,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
+    Config_readConfigFile();
     MW_FormData_setValidation(FDV_UTF8_SANITIZE);
     MW_Session_init();
     Authenticator_init();
@@ -64,7 +65,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     }
 
     HttpServerOpts *opts = HttpServerOpts_create(8080);
-    HttpServerOpts_numericHosts(opts);
+    if (!Config_resolveHosts()) HttpServerOpts_numericHosts(opts);
     server = HttpServer_create(opts);
     HttpServerOpts_destroy(opts);
 
@@ -98,6 +99,8 @@ int main(int argc, char **argv)
     PSC_RunOpts_init(Config_pidfile());
     PSC_RunOpts_enableDefaultLogging("swad");
     PSC_RunOpts_runas(Config_uid(), Config_gid());
+    if (Config_foreground()) PSC_RunOpts_foreground();
+    PSC_Log_setMaxLogLevel(Config_verbose() ? PSC_L_DEBUG : PSC_L_INFO);
     PSC_Event_register(PSC_Service_prestartup(), 0, prestartup, 0);
     PSC_Event_register(PSC_Service_shutdown(), 0, shutdown, 0);
     return PSC_Service_run();

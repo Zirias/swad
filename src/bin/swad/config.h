@@ -14,6 +14,7 @@ typedef enum CheckerClass
 } CheckerClass;
 
 int Config_init(int argc, char **argv) ATTR_NONNULL((2));
+void Config_readConfigFile(void);
 
 const CfgChecker *Config_checker(size_t num);
 const char *CfgChecker_name(const CfgChecker *self) CMETHOD ATTR_RETNONNULL;
@@ -26,8 +27,10 @@ const char *CfgRealm_checker(const CfgRealm *self, size_t num) CMETHOD;
 
 long Config_uid(void);
 long Config_gid(void);
-
 const char *Config_pidfile(void) ATTR_RETNONNULL;
+int Config_resolveHosts(void);
+int Config_foreground(void);
+int Config_verbose(void);
 
 void Config_done(void);
 

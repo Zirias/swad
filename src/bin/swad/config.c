@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L
+
 #include "config.h"
 
 #include <ctype.h>
@@ -9,6 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+
+#define ARGBUFSZ 8
 
 #define DEFCONFFILE SYSCONFDIR "/swad.conf"
 #define DEFPIDFILE RUNSTATEDIR "/swad.pid"
@@ -45,16 +50,20 @@ static CfgChecker **checkers;
 static CfgRealm **realms;
 
 static const char *cfgfile;
+static char *cfg_pidfile;
 static const char *pidfile;
 static long uid = -1;
 static long gid = -1;
+static int resolveHosts = -1;
+static int foreground = 0;
+static int verbose = 0;
 
 static unsigned lineno;
 static CfgSection section;
 
 #define skipws(p) while (isspace((unsigned char)*(p))) ++(p)
 
-static int longArg(long *setting, char *op)
+static int longArg(long *setting, const char *op)
 {
     char *endp;
     errno = 0;
@@ -62,6 +71,27 @@ static int longArg(long *setting, char *op)
     if (errno == ERANGE || *endp) return -1;
     *setting = val;
     return 0;
+}
+
+static int boolArg(int *setting, const char *str)
+{
+    if (!strcasecmp(str, "1")
+	    || !strcasecmp(str, "on")
+	    || !strcasecmp(str, "yes")
+	    || !strcasecmp(str, "true"))
+    {
+	*setting = 1;
+	return 0;
+    }
+    if (!strcasecmp(str, "0")
+	    || !strcasecmp(str, "no")
+	    || !strcasecmp(str, "off")
+	    || !strcasecmp(str, "false"))
+    {
+	*setting = 0;
+	return 0;
+    }
+    return -1;
 }
 
 static int readKeyValue(char *lp, char **key, char **value)
@@ -74,8 +104,8 @@ static int readKeyValue(char *lp, char **key, char **value)
     while (isspace((unsigned char)*(kend-1))) --kend;
     ++v;
     skipws(v);
-    if (!*v || *v == ';') goto error;
-    size_t vlen = strcspn(v, ";");
+    if (!*v || *v == ';' || *v == '#') goto error;
+    size_t vlen = strcspn(v, ";#");
     while (isspace((unsigned char)v[vlen-1])) --vlen;
     *kend = 0;
     v[vlen] = 0;
@@ -167,6 +197,37 @@ static void readRealm(char *lp)
     realms[realms_count++] = realm;
 }
 
+static int parseUser(const char *str)
+{
+    struct passwd *p;
+    long tuid;
+
+    if (longArg(&tuid, str) < 0)
+    {
+	if (!(p = getpwnam(str))) return -1;
+	tuid = p->pw_uid;
+    }
+    else if (!(p = getpwuid(tuid))) return -1;
+    uid = tuid;
+    if (gid == -1) gid = p->pw_gid;
+    return 0;
+}
+
+static int parseGroup(const char *str)
+{
+    struct group *g;
+    long tgid;
+
+    if (longArg(&tgid, str) < 0)
+    {
+	if (!(g = getgrnam(str))) return -1;
+	tgid = g->gr_gid;
+    }
+    else if (!(g = getgrgid(tgid))) return -1;
+    gid = tgid;
+    return 0;
+}
+
 static void readOption(char *lp)
 {
     char *key;
@@ -175,41 +236,37 @@ static void readOption(char *lp)
 
     if (!strcmp(key, "user"))
     {
-	struct passwd *p;
-	if (longArg(&uid, value) < 0)
+	if (uid < 0 && parseUser(value) < 0)
 	{
-	    if (!(p = getpwnam(value))) goto uiderr;
-	    uid = p->pw_uid;
+	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown user `%s', "
+		    "ignoring", cfgfile, lineno, value);
 	}
-	else if (!(p = getpwuid(uid)))
-	{
-	    uid = -1;
-	    goto uiderr;
-	}
-	if (gid == -1) gid = p->pw_gid;
-	return;
-uiderr:
-	PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown user `%s', "
-		"ignoring", cfgfile, lineno, value);
 	return;
     }
     if (!strcmp(key, "group"))
     {
-	struct group *g;
-	if (longArg(&gid, value) < 0)
+	if (gid < 0 && parseGroup(value) < 0)
 	{
-	    if (!(g = getgrnam(value))) goto giderr;
-	    gid = g->gr_gid;
-	}
-	else if (!(g = getgrgid(gid)))
-	{
-	    gid = -1;
-	    goto giderr;
+	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown group `%s', "
+		    "ignoring", cfgfile, lineno, value);
 	}
 	return;
-giderr:
-	PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown group `%s', "
-		"ignoring", cfgfile, lineno, value);
+    }
+    if (!strcmp(key, "pidfile"))
+    {
+	if (!pidfile)
+	{
+	    cfg_pidfile = PSC_copystr(value);
+	    pidfile = cfg_pidfile;
+	}
+    }
+    if (!strcmp(key, "resolveHosts"))
+    {
+	if (resolveHosts < 0 && boolArg(&resolveHosts, value) < 0)
+	{
+	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] invalid setting `%s', "
+		    "ignoring", cfgfile, lineno, value);
+	}
 	return;
     }
 
@@ -229,7 +286,7 @@ static CfgSection readSection(char *lp)
     if (*lp != ']') goto error;
     ++lp;
     skipws(lp);
-    if (*lp && *lp != ';') goto error;
+    if (*lp && *lp != ';' && *lp != '#') goto error;
 
     *end = 0;
     if (!strcmp(start, "global")) return CS_GLOBAL;
@@ -270,7 +327,7 @@ static void readConfigFile(FILE *f)
 	}
 	*nl = 0;
 	skipws(lp);
-	if (!*lp || *lp == ';') continue;
+	if (!*lp || *lp == ';' || *lp == '#') continue;
 	if (*lp == '[')
 	{
 	    section = readSection(lp);
@@ -291,13 +348,168 @@ static void readConfigFile(FILE *f)
     }
 }
 
+static void usage(const char *prgname, const char *error)
+{
+    fprintf(stderr, "usage: %s [-Rfrv] [-u user] [-g group]\n", prgname);
+    if (error) fprintf(stderr, "\nError: %s\n", error);
+}
+
+static int addArg(char *args, int *idx, char opt)
+{
+    if (*idx == ARGBUFSZ) return -1;
+    memmove(args+1, args, (*idx)++);
+    args[0] = opt;
+    return 0;
+}
+
+static int optArg(char *args, int *idx, char *op, const char **error)
+{
+    *error = 0;
+    if (!*idx) return -1;
+    switch (args[--*idx])
+    {
+	case 'c':
+	    cfgfile = op;
+	    break;
+	case 'g':
+	    if (parseGroup(op) < 0)
+	    {
+		*error = "Unknown group";
+		return -1;
+	    }
+	    break;
+	case 'p':
+	    pidfile = op;
+	    break;
+	case 'u':
+	    if (parseUser(op) < 0)
+	    {
+		*error = "Unknown user";
+		return -1;
+	    }
+	    break;
+	default:
+	    return -1;
+    }
+    return 0;
+}
+
+static int readArguments(int argc, char **argv)
+{
+    int escapedash = 0;
+    int arg;
+    int naidx = 0;
+    char needargs[ARGBUFSZ];
+    const char onceflags[] = "cgpu";
+    char seen[sizeof onceflags - 1] = {0};
+
+    const char *prgname = "swad";
+    if (argc > 0) prgname = argv[0];
+
+    const char *errstr;
+    for (arg = 1; arg < argc; ++arg)
+    {
+	char *o = argv[arg];
+	if (!escapedash && *o == '-' && o[1] == '-' && !o[2])
+	{
+	    escapedash = 1;
+	    continue;
+	}
+
+	if (!escapedash && *o == '-' && o[1])
+	{
+	    if (naidx)
+	    {
+		usage(prgname, "Missing argument(s) for given flags");
+		return -1;
+	    }
+
+	    for (++o; *o; ++o)
+	    {
+		const char *sip = strchr(onceflags, *o);
+		if (sip)
+		{
+		    int si = (int)(sip - onceflags);
+		    if (seen[si])
+		    {
+			if (optArg(needargs, &naidx, o, &errstr) < 0)
+			{
+			    usage(prgname, errstr);
+			    return -1;
+			}
+			else goto next;
+		    }
+		    seen[si] = 1;
+		}
+		switch (*o)
+		{
+		    case 'c':
+		    case 'g':
+		    case 'u':
+			if (addArg(needargs, &naidx, *o) < 0) return -1;
+			break;
+
+		    case 'R':
+			resolveHosts = 0;
+			break;
+
+		    case 'f':
+			foreground = 1;
+			break;
+
+		    case 'r':
+			resolveHosts = 1;
+			break;
+
+		    case 'v':
+			verbose = 1;
+			break;
+
+		    default:
+			if (optArg(needargs, &naidx, o, &errstr) < 0)
+			{
+			    usage(prgname, errstr);
+			    return -1;
+			}
+			goto next;
+		}
+	    }
+	}
+	else if (!escapedash && naidx)
+	{
+	    if (optArg(needargs, &naidx, o, &errstr) < 0)
+	    {
+		usage(prgname, errstr);
+		return -1;
+	    }
+	}
+	else
+	{
+	    usage(prgname, "Extra arguments found");
+	    return -1;
+	}
+next:	;
+    }
+    if (naidx)
+    {
+	usage(prgname, "Missing argument(s) for given flags");
+	return -1;
+    }
+    return 0;
+}
+
 int Config_init(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
 
-    cfgfile = DEFCONFFILE;
-    pidfile = DEFPIDFILE;
+    int rc = readArguments(argc, argv);
+    if (!cfgfile) cfgfile = DEFCONFFILE;
+    return rc;
+}
+
+void Config_readConfigFile(void)
+{
     FILE *f = fopen(cfgfile, "r");
     if (f)
     {
@@ -309,8 +521,6 @@ int Config_init(int argc, char **argv)
 	PSC_Log_fmt(PSC_L_WARNING, "config: Cannot open config file %s",
 		cfgfile);
     }
-
-    return 0;
 }
 
 const CfgChecker *Config_checker(size_t num)
@@ -364,7 +574,23 @@ long Config_gid(void)
 
 const char *Config_pidfile(void)
 {
+    if (!pidfile) return DEFPIDFILE;
     return pidfile;
+}
+
+int Config_resolveHosts(void)
+{
+    return resolveHosts < 0 ? 0 : resolveHosts;
+}
+
+int Config_foreground(void)
+{
+    return foreground;
+}
+
+int Config_verbose(void)
+{
+    return verbose;
 }
 
 void Config_done(void)
@@ -393,6 +619,8 @@ void Config_done(void)
     }
     free(checkers);
 
+    free(cfg_pidfile);
+
     realms_count = 0;
     realms_capa = 0;
     checkers_count = 0;
@@ -401,5 +629,10 @@ void Config_done(void)
     checkers = 0;
     uid = -1;
     gid = -1;
+    cfg_pidfile = 0;
+    pidfile = 0;
+    resolveHosts = -1;
+    foreground = 0;
+    verbose = 0;
 }
 
