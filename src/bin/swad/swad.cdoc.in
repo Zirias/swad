@@ -22,7 +22,7 @@ defgroup: 2
 
 [flag c file]
 description: Path to the configuration file.
-default: %%SYSCONFDIR%%/swad.conf
+default: `%%SYSCONFDIR%%/swad.conf`
 
 [flag f]
 description:
