@@ -19,6 +19,7 @@ struct User
 {
     char *username;
     char *realname;
+    const char *checker;
 };
 
 static PSC_HashTable *checkers;
@@ -28,11 +29,13 @@ static pthread_mutex_t checkerlock;
 static pthread_mutex_t realmlock;
 static pthread_mutex_t authlock;
 
-static User *createUser(const char *username, char *realname)
+static User *createUser(const char *username, char *realname,
+	const char *checker)
 {
     User *user = PSC_malloc(sizeof *user);
     user->username = PSC_copystr(username);
     user->realname = realname;
+    user->checker = checker;
     return user;
 }
 
@@ -41,6 +44,7 @@ static User *copyUser(const User *other)
     User *user = PSC_malloc(sizeof *user);
     user->username = PSC_copystr(other->username);
     user->realname = PSC_copystr(other->realname);
+    user->checker = other->checker;
     return user;
 }
 
@@ -95,50 +99,32 @@ const char *Authenticator_realm(const Authenticator *self)
     return self->realm;
 }
 
-static int realmMatches(const char *realm, PSC_List *realmConfig)
-{
-    int matches = 0;
-    PSC_List *otherRealmConfig = PSC_HashTable_get(realms, realm);
-    if (!otherRealmConfig || PSC_List_size(otherRealmConfig)) return matches;
-
-    PSC_ListIterator *i = PSC_List_iterator(realmConfig);
-    while (!matches && PSC_ListIterator_moveNext(i))
-    {
-	const char *a = PSC_ListIterator_current(i);
-	PSC_ListIterator *j = PSC_List_iterator(otherRealmConfig);
-	while (!matches && PSC_ListIterator_moveNext(j))
-	{
-	    const char *b = PSC_ListIterator_current(j);
-	    matches = !strcmp(a, b);
-	}
-	PSC_ListIterator_destroy(j);
-    }
-    PSC_ListIterator_destroy(i);
-    return matches;
-}
-
 int Authenticator_silentLogin(Authenticator *self)
 {
-    PSC_HashTableIterator *i = 0;
     pthread_mutex_lock(&authlock);
     pthread_mutex_lock(&realmlock);
+    PSC_HashTableIterator *i = 0;
+    PSC_ListIterator *j = 0;
     User *user = PSC_HashTable_get(self->authinfo, self->realm);
     if (user) goto done;
     PSC_List *realmConfig = PSC_HashTable_get(realms, self->realm);
-    if (!realmConfig || !PSC_List_size(realmConfig)) goto done;
+    if (!realmConfig || PSC_List_size(realmConfig)) goto done;
+    j = PSC_List_iterator(realmConfig);
     for (i = PSC_HashTable_iterator(self->authinfo);
 	    PSC_HashTableIterator_moveNext(i); )
     {
-	if (realmMatches(PSC_HashTableIterator_key(i), realmConfig))
+	const User *otherUser = PSC_HashTableIterator_current(i);
+	while (PSC_ListIterator_moveNext(j))
 	{
-	    user = copyUser(PSC_HashTableIterator_current(i));
-	    PSC_HashTable_set(self->authinfo, self->realm,
-		    user, deleteUser);
+	    if (strcmp(user->checker, PSC_ListIterator_current(j))) continue;
+	    user = copyUser(otherUser);
+	    PSC_HashTable_set(self->authinfo, self->realm, user, deleteUser);
 	    goto done;
 	}
     }
 done:
     PSC_HashTableIterator_destroy(i);
+    PSC_ListIterator_destroy(j);
     pthread_mutex_unlock(&realmlock);
     pthread_mutex_unlock(&authlock);
     return user ? 1 : 0;
@@ -154,9 +140,9 @@ int Authenticator_login(Authenticator *self, const char *user, const char *pw)
     PSC_ListIterator *i = PSC_List_iterator(realmConfig);
     while (!ok && PSC_ListIterator_moveNext(i))
     {
+	const char *checkerName = PSC_ListIterator_current(i);
 	pthread_mutex_lock(&checkerlock);
-	CredentialsChecker *checker = PSC_HashTable_get(
-		checkers, PSC_ListIterator_current(i));
+	CredentialsChecker *checker = PSC_HashTable_get(checkers, checkerName);
 	pthread_mutex_unlock(&checkerlock);
 	if (checker)
 	{
@@ -164,7 +150,7 @@ int Authenticator_login(Authenticator *self, const char *user, const char *pw)
 	    if (checker->check(checker, user, pw, &realname))
 	    {
 		PSC_HashTable_set(self->authinfo, self->realm,
-			createUser(user, realname), deleteUser);
+			createUser(user, realname, checkerName), deleteUser);
 		ok = 1;
 	    }
 	}
