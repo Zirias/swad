@@ -133,8 +133,8 @@
 #   <name> = <checker_1>[:checker_2>[...:<checker_n>]]
 #
 # A realm can be requested by the query parameter "realm" (like in
-# "http://localhost:8080/login?realm=foo") or, for example by a reverse proxy,
-# by setting the custom header "X-SWAD-Realm". If no specific realm is
+# "http://localhost:8080/login?realm=foo") or, for example by the reverse
+# proxy, by setting the custom header "X-SWAD-Realm". If no specific realm is
 # requested, swad uses a default realm named SWAD, so configure this one if
 # you intend to use it.
 #
