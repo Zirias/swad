@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200112L
 
 #include "config.h"
+#include "help.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -476,10 +477,21 @@ static void readConfigFile(FILE *f)
     }
 }
 
+static void printusage(FILE *file, const char *prgname)
+{
+    fprintf(file, SWAD_USAGE_FMT, SWAD_USAGE_ARGS(prgname));
+}
+
 static void usage(const char *prgname, const char *error)
 {
-    fprintf(stderr, "usage: %s [-Rfrv] [-u user] [-g group]\n", prgname);
+    printusage(stderr, prgname);
     if (error) fprintf(stderr, "\nError: %s\n", error);
+}
+
+static void help(const char *prgname)
+{
+    printusage(stdout, prgname);
+    fputs(SWAD_HELP, stdout);
 }
 
 static int addArg(char *args, int *idx, char opt)
@@ -585,9 +597,17 @@ static int readArguments(int argc, char **argv)
 			foreground = 1;
 			break;
 
+		    case 'h':
+			help(prgname);
+			return 1;
+
 		    case 'r':
 			resolveHosts = 1;
 			break;
+
+		    case 'V':
+			puts("swad v" VERSION);
+			return 1;
 
 		    case 'v':
 			verbose = 1;

@@ -29,4 +29,7 @@ defaults.mk
 /tools/*/dist/
 /tools/bin/
 *.html.h
-*.conf.sample
+src/bin/swad/swad.conf.sample
+src/bin/swad/swad.cdoc
+src/bin/swad/swad.8
+src/bin/swad/help.h

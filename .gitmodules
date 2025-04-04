@@ -4,3 +4,6 @@
 [submodule "poser"]
 	path = poser
 	url = https://github.com/Zirias/poser.git
+[submodule "tools/mkclidoc"]
+	path = tools/mkclidoc
+	url = https://github.com/Zirias/mkclidoc.git

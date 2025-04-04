@@ -143,7 +143,9 @@ static void shutdown(void *receiver, void *sender, void *args)
 
 int main(int argc, char **argv)
 {
-    if (Config_init(argc, argv) < 0) return EXIT_FAILURE;
+    int rc = Config_init(argc, argv);
+    if (rc < 0) return EXIT_FAILURE;
+    if (rc > 0) return EXIT_SUCCESS;
     PSC_Log_setMaxLogLevel(Config_verbose() ? PSC_L_DEBUG : PSC_L_INFO);
     PSC_Log_setFileLogger(stderr);
     Config_readConfigFile();

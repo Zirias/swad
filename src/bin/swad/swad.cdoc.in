@@ -1,0 +1,75 @@
+name: swad
+comment: Simple Web Authentication Daemon
+date: 20250404
+author: Felix Palmen <felix@palmen-it.de>
+version: v%%VERSION%%
+license: BSD 2-clause (all rights reserved)
+www: https://github.com/Zirias/swad
+description:
+%%name%% provides a http service for cookie authentication with a HTML login
+form. The intended usage is to put it behind a reverse proxy that can do
+sub-requests for authentication, like nginx' `auth_request` module.
+
+It supports authentication methods using a username and a password as
+credentials. For these, different credential checkers can be configured.
+
+Login is offered for configurable realms, which have a name and a stack of
+credential checkers. These checkers  are tried in the order they are
+configured for the realm.
+.
+
+defgroup: 2
+
+[flag c file]
+description: Path to the configuration file.
+default: %%SYSCONFDIR%%/swad.conf
+
+[flag f]
+description:
+Don't detach from the controlling terminal, instead run in foreground. In this
+mode, log output goes directly to the terminal.
+.
+
+[flag g group]
+description:
+Run as the given group name or gid. Only works when %%name%% is started
+as root.
+.
+default: Use the primary group of the configured user, or no change
+
+[flag h]
+group: 1
+optional: 0
+description: Print a help text and exit.
+
+[flag r]
+description: Attempt to resolve remote hostnames.
+
+[flag u user]
+description:
+Run as the given user name or uid. Only works when %%name%% is started
+as root.
+.
+default: Don't attempt to change the user
+
+[flag v]
+description: Set the log level to debug to enable verbose output.
+
+[flag R]
+description:
+Don't attempt to resolve remote hostnames. This is the default unless the
+configuration file enables resolving.
+.
+
+[flag V]
+group: 0
+optional: 0
+description: Print version information and exit.
+
+[file %%SYSCONFDIR%%/swad.conf]
+description:
+The configuration file. An example is installed with a `.sample` suffix, all
+the settings are documented in there. For settings that also have a commandline
+flag, the commandline overrides the configuration file.
+.
+
