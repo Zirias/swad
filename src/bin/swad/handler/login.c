@@ -100,6 +100,19 @@ static void showForm(HttpContext *context, Session *session,
 {
     Authenticator *auth = Authenticator_create(session, realm);
     const User *user = Authenticator_user(auth);
+    if (!user && Authenticator_silentLogin(auth))
+    {
+	user = Authenticator_user(auth);
+	Authenticator_destroy(auth);
+	Session_setProp(session, SK_ERROR, 0, 0);
+	PSC_Log_fmt(PSC_L_INFO, "login: %s silently logged in for %s",
+		User_username(user), realm);
+	const char *rdr = Session_getProp(session, SK_RDR);
+	if (!rdr) rdr = "/";
+	HttpContext_setResponse(context,
+		HttpResponse_createRedirect(HTTP_OK, rdr));
+	return;
+    }
     Authenticator_destroy(auth);
 
     Template *tmpl = 0;
