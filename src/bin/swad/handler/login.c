@@ -38,10 +38,11 @@ static void doLogin(HttpContext *context, Session *session)
 {
     HttpStatus status = HTTP_SEEOTHER;
     const FormData *form = FormData_get(context);
+    const char *rdr = 0;
     if (!form || !FormData_valid(form)) goto done;
 
     const char *realm = Session_getProp(session, SK_REALM);
-    const char *rdr = Session_getProp(session, SK_FORM);
+    rdr = Session_getProp(session, SK_FORM);
     if  (!realm || !rdr) goto done;
 
     size_t len = 0;
@@ -90,6 +91,7 @@ static void doLogin(HttpContext *context, Session *session)
     }
 
 done:
+    if (!rdr) rdr = "/";
     HttpContext_setResponse(context, HttpResponse_createRedirect(status, rdr));
 }
 
