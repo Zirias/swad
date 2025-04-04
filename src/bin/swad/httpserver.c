@@ -389,6 +389,11 @@ void HttpServerOpts_numericHosts(HttpServerOpts *self)
     PSC_TcpServerOpts_numericHosts(self->serverOpts);
 }
 
+void HttpServerOpts_setProto(HttpServerOpts *self, PSC_Proto proto)
+{
+    PSC_TcpServerOpts_setProto(self->serverOpts, proto);
+}
+
 void HttpServerOpts_destroy(HttpServerOpts *self)
 {
     if (!self) return;

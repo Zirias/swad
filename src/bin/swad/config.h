@@ -28,7 +28,7 @@ const char *CfgRealm_name(const CfgRealm *self) CMETHOD ATTR_RETNONNULL;
 const char *CfgRealm_checker(const CfgRealm *self, size_t num) CMETHOD;
 
 const CfgServer *Config_server(size_t num);
-const char *CfgServer_name(const CfgServer *self) CMETHOD ATTR_RETNONNULL;
+const char *CfgServer_name(const CfgServer *self) CMETHOD;
 int CfgServer_port(const CfgServer *self) CMETHOD;
 const char *CfgServer_listen(const CfgServer *self, size_t num) CMETHOD;
 PSC_Proto CfgServer_proto(const CfgServer *self) CMETHOD;

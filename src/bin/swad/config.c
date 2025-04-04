@@ -691,6 +691,48 @@ const char *CfgRealm_checker(const CfgRealm *self, size_t num)
     return self->checkers[num];
 }
 
+const CfgServer *Config_server(size_t num)
+{
+    if (num >= servers_count) return 0;
+    return servers[num];
+}
+
+const char *CfgServer_name(const CfgServer *self)
+{
+    return self->name;
+}
+
+int CfgServer_port(const CfgServer *self)
+{
+    return self->port;
+}
+
+const char *CfgServer_listen(const CfgServer *self, size_t num)
+{
+    if (num >= self->nlisten) return 0;
+    return self->listen[num];
+}
+
+PSC_Proto CfgServer_proto(const CfgServer *self)
+{
+    return self->proto;
+}
+
+int CfgServer_tls(const CfgServer *self)
+{
+    return self->tls;
+}
+
+const char *CfgServer_tlsCert(const CfgServer *self)
+{
+    return self->tlsCert;
+}
+
+const char *CfgServer_tlsKey(const CfgServer *self)
+{
+    return self->tlsKey;
+}
+
 long Config_uid(void)
 {
     return uid;

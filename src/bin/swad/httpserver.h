@@ -6,6 +6,7 @@
 
 #include <poser/decl.h>
 #include <poser/core/log.h>
+#include <poser/core/proto.h>
 
 C_CLASS_DECL(HttpRequest);
 C_CLASS_DECL(HttpServer);
@@ -25,6 +26,7 @@ void HttpServerOpts_enableTls(HttpServerOpts *self,
 	const char *certfile, const char *keyfile)
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
 void HttpServerOpts_numericHosts(HttpServerOpts *self) CMETHOD;
+void HttpServerOpts_setProto(HttpServerOpts *self, PSC_Proto proto) CMETHOD;
 void HttpServerOpts_destroy(HttpServerOpts *self);
 
 HttpServer *HttpServer_create(const HttpServerOpts *opts)
