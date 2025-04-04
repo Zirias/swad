@@ -11,9 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CI_CFLAGS: -O2 -std=c11 -Wall -Wextra -Wshadow -Werror -pedantic
+      CI_DEPS: libpam0g-dev
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
+    - name: build-depends
+      run: sudo apt-get -y install ${CI_DEPS}
     - name: make
       run: make -j4 CFLAGS="${CI_CFLAGS}"
