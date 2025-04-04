@@ -12,6 +12,13 @@ BIN2CSTR_CLEANGOAL=	distclean
 
 DISTCLEANDIRS=		tools/bin
 
+define checktype
+$(shell printf "#include <$1>\nstatic $2 *x;" | \
+	$(or $(CC),cc) -xc -c -o/dev/null - 2>/dev/null && echo 1)
+endef
+
+HAVE_SYSPAM=		$(call checktype,security/pam_appl.h,pam_handle_t)
+
 include zimk/zimk.mk
 
 ifeq ($(BUNDLED_POSER),1)
