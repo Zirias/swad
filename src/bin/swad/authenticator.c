@@ -108,7 +108,7 @@ int Authenticator_silentLogin(Authenticator *self)
     User *user = PSC_HashTable_get(self->authinfo, self->realm);
     if (user) goto done;
     PSC_List *realmConfig = PSC_HashTable_get(realms, self->realm);
-    if (!realmConfig || PSC_List_size(realmConfig)) goto done;
+    if (!realmConfig || PSC_List_size(realmConfig) == 0) goto done;
     j = PSC_List_iterator(realmConfig);
     for (i = PSC_HashTable_iterator(self->authinfo);
 	    PSC_HashTableIterator_moveNext(i); )
@@ -116,7 +116,8 @@ int Authenticator_silentLogin(Authenticator *self)
 	const User *otherUser = PSC_HashTableIterator_current(i);
 	while (PSC_ListIterator_moveNext(j))
 	{
-	    if (strcmp(user->checker, PSC_ListIterator_current(j))) continue;
+	    if (strcmp(otherUser->checker,
+			PSC_ListIterator_current(j))) continue;
 	    user = copyUser(otherUser);
 	    PSC_HashTable_set(self->authinfo, self->realm, user, deleteUser);
 	    goto done;
