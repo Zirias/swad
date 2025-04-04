@@ -34,8 +34,7 @@ swad_DEFINES=		-DLIBEXECDIR=\"$(libexecdir)\" \
 			-DRUNSTATEDIR=\"$(runstatedir)\" \
 			-DSYSCONFDIR=\"$(sysconfdir)\"
 swad_LDFLAGS=		-pthread
-swad_PKGDEPS=		posercore \
-			zlib
+swad_PKGDEPS=		zlib
 swad_TMPL=		login \
 			logout
 swad_GEN=		BIN2CSTR
@@ -45,5 +44,16 @@ swad_SUB_FILES=		swad.conf.sample
 swad_SUB_LIST=		"RUNSTATEDIR=$(runstatedir)"
 swad_EXTRADIRS=		sysconf
 swad_sysconf_FILES=	swad.conf.sample
+
+ifeq ($(BUNDLED_POSER),1)
+swad_STATICDEPS+=	posercore
+swad_PRECFLAGS+=	-I./poser/include
+swad_LIBS+=		posercore $(posercore_LIBS)
+swad_LDFLAGS+=		$(posercore_LDFLAGS)
+swad_PKGDEPS+=		$(posercore_PKGDEPS)
+swad_DEFINES+=		-DBUNDLED_POSER
+else
+swad_PKGDEPS+=		posercore >= 1.2.3
+endif
 
 $(call binrules,swad)
