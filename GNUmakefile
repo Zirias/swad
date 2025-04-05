@@ -19,6 +19,8 @@ MKCLIDOC_MAKEGOAL=	install
 MKCLIDOC_CLEANGOAL=	distclean
 
 DISTCLEANDIRS=		tools/bin
+NODIST=			poser/zimk \
+			tools/mkclidoc/zimk
 
 define checktype
 $(shell printf "#include <$1>\nstatic $2 *x;" | \
