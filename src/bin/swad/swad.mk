@@ -47,6 +47,8 @@ swad_SUB_FILES=		swad.cdoc \
 			swad.conf.sample
 swad_SUB_LIST=		"RUNSTATEDIR=$(runstatedir)" \
 			"SYSCONFDIR=$(sysconfdir)"
+swad_DOCS=		README.md \
+			LICENSE.txt
 swad_EXTRADIRS=		sysconf
 swad_sysconf_FILES=	swad.conf.sample
 
