@@ -35,6 +35,7 @@ PSC_Proto CfgServer_proto(const CfgServer *self) CMETHOD;
 int CfgServer_tls(const CfgServer *self) CMETHOD;
 const char *CfgServer_tlsCert(const CfgServer *self) CMETHOD;
 const char *CfgServer_tlsKey(const CfgServer *self) CMETHOD;
+int CfgServer_trustedProxies(const CfgServer *self) CMETHOD;
 
 long Config_uid(void);
 long Config_gid(void);

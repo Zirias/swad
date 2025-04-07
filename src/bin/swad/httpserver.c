@@ -8,6 +8,7 @@
 #include "http/httpresponse.h"
 #include "http/httpstatus.h"
 #include "mediatype.h"
+#include "proxylist.h"
 #include "util.h"
 
 #include <poser/core.h>
@@ -38,11 +39,13 @@ struct HttpServer
     size_t routescapa;
     size_t middlewarescount;
     size_t middlewarescapa;
+    int trustedProxies;
 };
 
 struct HttpServerOpts
 {
     PSC_TcpServerOpts *serverOpts;
+    int trustedProxies;
 };
 
 typedef struct ConnectionContext
@@ -178,23 +181,39 @@ static HttpHandler getMiddlewareAt(void *owner, size_t pos)
 static void logRequest(HttpServer *self, HttpContext *context)
 {
     char raddr[1024];
+    size_t raddr_pos = 0;
+    const PSC_List *remotes = ProxyList_get(context);
+    size_t nremotes = PSC_List_size(remotes);
+    for (size_t i = nremotes > (size_t)(self->trustedProxies + 1) ?
+	    nremotes - self->trustedProxies - 1 : 0;
+	    i < nremotes; ++i)
+    {
+	const RemoteEntry *remote = PSC_List_at(remotes, i);
+	const char *addr = RemoteEntry_addr(remote);
+	const char *host = RemoteEntry_host(remote);
+	int rc;
+	if (host) rc = snprintf(raddr + raddr_pos, sizeof raddr - raddr_pos,
+		i < nremotes - 1 ? "%s (%s), " : "%s (%s)", addr, host);
+	else rc = snprintf(raddr + raddr_pos, sizeof raddr - raddr_pos,
+		i < nremotes - 1 ? "%s, " : "%s", addr);
+	if (rc < 0) break;
+	raddr_pos += rc;
+	if (raddr_pos >= sizeof raddr - 1)
+	{
+	    raddr_pos = sizeof raddr - 1;
+	    break;
+	}
+    }
+    raddr[raddr_pos] = 0;
+
     HttpRequest *request = HttpContext_request(context);
     HttpStatus status = HttpResponse_status(HttpContext_response(context));
     PSC_LogLevel level = PSC_L_INFO;
     if (self->loglevel) level = self->loglevel(request, status);
-    const char *remoteAddr = HttpContext_remoteAddr(context);
-    const Header *fwd = HeaderSet_first(HttpRequest_headers(request),
-	    "X-Forwarded-For");
-    if (fwd)
-    {
-	snprintf(raddr, sizeof raddr, "%s, %s", remoteAddr, Header_value(fwd));
-	remoteAddr = raddr;
-    }
-    const char *remoteHost = HttpContext_remoteHost(context);
-    if (!remoteHost) remoteHost = "";
-    PSC_Log_fmt(level, "http: %u - %s %s HTTP/1.%u - %s [%s]", status,
+
+    PSC_Log_fmt(level, "http: %u - %s %s HTTP/1.%u - %s", status,
 	    HttpRequest_rawMethod(request), HttpRequest_path(request),
-	    HttpRequest_version(request), remoteHost, remoteAddr);
+	    HttpRequest_version(request), raddr);
 }
 
 static void pipelineJobDone(void *receiver, void *sender, void *args)
@@ -370,6 +389,7 @@ HttpServerOpts *HttpServerOpts_create(int port)
 {
     HttpServerOpts *self = PSC_malloc(sizeof *self);
     self->serverOpts = PSC_TcpServerOpts_create(port);
+    self->trustedProxies = 0;
     return self;
 }
 
@@ -394,6 +414,12 @@ void HttpServerOpts_setProto(HttpServerOpts *self, PSC_Proto proto)
     PSC_TcpServerOpts_setProto(self->serverOpts, proto);
 }
 
+void HttpServerOpts_trustedProxies(HttpServerOpts *self, int num)
+{
+    if (num < 0) num = 0;
+    self->trustedProxies = num;
+}
+
 void HttpServerOpts_destroy(HttpServerOpts *self)
 {
     if (!self) return;
@@ -415,6 +441,7 @@ HttpServer *HttpServer_create(const HttpServerOpts *opts)
     self->routescapa = ROUTESCHUNK;
     self->middlewarescount = 0;
     self->middlewarescapa = MIDDLEWARESCHUNK;
+    self->trustedProxies = opts->trustedProxies;
 
     PSC_Event_register(PSC_Server_clientConnected(server), self,
 	    tcpClientConnected, 0);

@@ -26,6 +26,7 @@ swad_MODULES=		authenticator \
 			middleware/formdata \
 			middleware/pathparser \
 			middleware/session \
+			proxylist \
 			random \
 			template \
 			tmpl \

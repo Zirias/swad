@@ -87,6 +87,17 @@
 #
 ; tls_key_file =
 
+# Number of proxies to trust.
+#
+# This is used for determining the actual remote address. If left at 0,
+# no proxies are trusted and the immediate remote address of the connection
+# is used. Every trusted proxy is expected to write a valid "Forwarded"
+# (RFC 7239) or "X-Forwarded-For" header.
+#
+# min: 0; max: 16
+#
+; trusted_proxies = 0
+
 # ============================================================================
 
 # Credential checkers.

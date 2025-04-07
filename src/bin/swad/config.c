@@ -44,6 +44,7 @@ struct CfgServer
     PSC_Proto proto;
     int port;
     int tls;
+    int trustedProxies;
 };
 
 typedef enum CfgSection
@@ -303,6 +304,11 @@ static void readServer(char *lp)
     {
 	free(server->tlsKey);
 	server->tlsKey = PSC_copystr(value);
+	return;
+    }
+    if (!strcmp(key, "trusted_proxies"))
+    {
+	if (intArg(&server->trustedProxies, value, 0, 16, 10) < 0) goto inval;
 	return;
     }
 
@@ -751,6 +757,11 @@ const char *CfgServer_tlsCert(const CfgServer *self)
 const char *CfgServer_tlsKey(const CfgServer *self)
 {
     return self->tlsKey;
+}
+
+int CfgServer_trustedProxies(const CfgServer *self)
+{
+    return self->trustedProxies;
 }
 
 long Config_uid(void)

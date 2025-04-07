@@ -97,6 +97,7 @@ static void prestartup(void *receiver, void *sender, void *args)
 	}
 	HttpServerOpts_setProto(opts, CfgServer_proto(s));
 	if (!Config_resolveHosts()) HttpServerOpts_numericHosts(opts);
+	HttpServerOpts_trustedProxies(opts, CfgServer_trustedProxies(s));
 	HttpServer *server = HttpServer_create(opts);
 	HttpServerOpts_destroy(opts);
 	if (server)
