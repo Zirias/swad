@@ -98,6 +98,13 @@
 #
 ; trusted_proxies = 0
 
+# NAT64 prefix.
+#
+# This is used to translate NAT64 addresses back to IPv4 addresses. The
+# default is to use the well-known prefix.
+#
+; nat64_prefix = 64:ff9b::/96
+
 # ============================================================================
 
 # Credential checkers.

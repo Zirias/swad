@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "help.h"
+#include "ipaddr.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -39,6 +40,7 @@ struct CfgServer
     char *name;
     char *tlsCert;
     char *tlsKey;
+    IpAddr *nat64Prefix;
     char **listen;
     size_t nlisten;
     PSC_Proto proto;
@@ -67,6 +69,7 @@ static CfgChecker **checkers;
 static CfgRealm **realms;
 static CfgServer **servers;
 
+static IpAddr *nat64Prefix;
 static const char *cfgfile;
 static char *cfg_pidfile;
 static const char *pidfile;
@@ -309,6 +312,18 @@ static void readServer(char *lp)
     if (!strcmp(key, "trusted_proxies"))
     {
 	if (intArg(&server->trustedProxies, value, 0, 16, 10) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "nat64_prefix"))
+    {
+	if (server->nat64Prefix) IpAddr_destroy(server->nat64Prefix);
+	if ((server->nat64Prefix = IpAddr_create(value)) &&
+		IpAddr_prefixlen(server->nat64Prefix) != 96)
+	{
+	    IpAddr_destroy(server->nat64Prefix);
+	    server->nat64Prefix = 0;
+	}
+	if (!server->nat64Prefix) goto inval;
 	return;
     }
 
@@ -764,6 +779,13 @@ int CfgServer_trustedProxies(const CfgServer *self)
     return self->trustedProxies;
 }
 
+const IpAddr *CfgServer_nat64Prefix(const CfgServer *self)
+{
+    if (self->nat64Prefix) return self->nat64Prefix;
+    if (!nat64Prefix) nat64Prefix = IpAddr_create("64:ff9b::/96");
+    return nat64Prefix;
+}
+
 long Config_uid(void)
 {
     return uid;
@@ -838,6 +860,8 @@ void Config_done(void)
 
     free(cfg_pidfile);
 
+    IpAddr_destroy(nat64Prefix);
+
     realms_count = 0;
     realms_capa = 0;
     checkers_count = 0;
@@ -847,6 +871,7 @@ void Config_done(void)
     realms = 0;
     checkers = 0;
     servers = 0;
+    nat64Prefix = 0;
     uid = -1;
     gid = -1;
     cfg_pidfile = 0;

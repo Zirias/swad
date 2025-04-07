@@ -7,6 +7,7 @@
 #include "http/httprequest.h"
 #include "http/httpresponse.h"
 #include "http/httpstatus.h"
+#include "ipaddr.h"
 #include "mediatype.h"
 #include "proxylist.h"
 #include "util.h"
@@ -35,6 +36,7 @@ struct HttpServer
     PSC_Server *server;
     HttpRoute *routes;
     HttpHandler *middlewares;
+    const IpAddr *nat64Prefix;
     size_t routescount;
     size_t routescapa;
     size_t middlewarescount;
@@ -45,6 +47,7 @@ struct HttpServer
 struct HttpServerOpts
 {
     PSC_TcpServerOpts *serverOpts;
+    const IpAddr *nat64Prefix;
     int trustedProxies;
 };
 
@@ -191,11 +194,25 @@ static void logRequest(HttpServer *self, HttpContext *context)
 	const RemoteEntry *remote = PSC_List_at(remotes, i);
 	const char *addr = RemoteEntry_addr(remote);
 	const char *host = RemoteEntry_host(remote);
+	IpAddr *ip = IpAddr_create(addr);
+	IpAddr *ipv4 = 0;
+	if (ip)
+	{
+	    if (self->nat64Prefix)
+	    {
+		const IpAddr *prefixes[] = { self->nat64Prefix, 0 };
+		ipv4 = IpAddr_nat64(ip, prefixes);
+	    }
+	    if (ipv4) addr = IpAddr_string(ipv4);
+	    else addr = IpAddr_string(ip);
+	}
 	int rc;
 	if (host) rc = snprintf(raddr + raddr_pos, sizeof raddr - raddr_pos,
 		i < nremotes - 1 ? "%s (%s), " : "%s (%s)", addr, host);
 	else rc = snprintf(raddr + raddr_pos, sizeof raddr - raddr_pos,
 		i < nremotes - 1 ? "%s, " : "%s", addr);
+	IpAddr_destroy(ipv4);
+	IpAddr_destroy(ip);
 	if (rc < 0) break;
 	raddr_pos += rc;
 	if (raddr_pos >= sizeof raddr - 1)
@@ -389,6 +406,7 @@ HttpServerOpts *HttpServerOpts_create(int port)
 {
     HttpServerOpts *self = PSC_malloc(sizeof *self);
     self->serverOpts = PSC_TcpServerOpts_create(port);
+    self->nat64Prefix = 0;
     self->trustedProxies = 0;
     return self;
 }
@@ -420,6 +438,11 @@ void HttpServerOpts_trustedProxies(HttpServerOpts *self, int num)
     self->trustedProxies = num;
 }
 
+void HttpServerOpts_nat64Prefix(HttpServerOpts *self, const IpAddr *prefix)
+{
+    self->nat64Prefix = prefix;
+}
+
 void HttpServerOpts_destroy(HttpServerOpts *self)
 {
     if (!self) return;
@@ -437,6 +460,7 @@ HttpServer *HttpServer_create(const HttpServerOpts *opts)
     self->routes = PSC_malloc(ROUTESCHUNK * sizeof *self->routes);
     self->middlewares = PSC_malloc(
 	    MIDDLEWARESCHUNK * sizeof *self->middlewares);
+    self->nat64Prefix = opts->nat64Prefix;
     self->routescount = 0;
     self->routescapa = ROUTESCHUNK;
     self->middlewarescount = 0;
