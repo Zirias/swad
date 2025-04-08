@@ -117,6 +117,7 @@ static char *parseEntry(char *entry, size_t len, int rfc7239)
 	{
 	    esc = 0;
 	    buf[buflen++] = entry[i];
+	    if (!bracket) bracket = -1;
 	    continue;
 	}
 
