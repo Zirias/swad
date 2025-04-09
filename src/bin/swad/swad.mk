@@ -29,6 +29,7 @@ swad_MODULES=		authenticator \
 			middleware/session \
 			proxylist \
 			random \
+			ratelimit \
 			template \
 			tmpl \
 			urlencode \
