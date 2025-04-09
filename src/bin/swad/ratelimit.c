@@ -93,8 +93,9 @@ static int checkLimit(Limit *self, struct timespec *ts, const char *id)
     }
     for (; e->last != now; ++e->last)
     {
-	e->total -= e->counts[e->countpos++];
-	if (e->countpos == self->ncounts) e->countpos = 0;
+	if (++e->countpos == self->ncounts) e->countpos = 0;
+	e->total -= e->counts[e->countpos];
+	e->counts[e->countpos] = 0;
     }
     if (e->total < self->limit)
     {
