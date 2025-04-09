@@ -59,7 +59,8 @@ static void doLogin(HttpContext *context, Session *session)
 	if (!authrdr) authrdr = "/";
 
 	Authenticator *auth = Authenticator_create(session, realm);
-	if (Authenticator_login(auth, user, pw))
+	int ok = Authenticator_login(auth, user, pw);
+	if (ok > 0)
 	{
 	    status = HTTP_OK;
 	    rdr = authrdr;
@@ -69,11 +70,21 @@ static void doLogin(HttpContext *context, Session *session)
 	}
 	else
 	{
-	    Session_setProp(session, SK_ERROR, "Invalid credentials", 0);
 	    Session_setProp(session, SK_AREALM, PSC_copystr(realm), free);
 	    Session_setProp(session, SK_ARDR, PSC_copystr(authrdr), free);
-	    PSC_Log_fmt(PSC_L_WARNING, "login: Failed login as %s for %s",
-		    user, realm);
+	    if (ok < 0)
+	    {
+		Session_setProp(session, SK_ERROR,
+			"Too many failed attempts, try again later", 0);
+		PSC_Log_fmt(PSC_L_WARNING, "login: Blocked login as %s for %s",
+			user, realm);
+	    }
+	    else
+	    {
+		Session_setProp(session, SK_ERROR, "Invalid credentials", 0);
+		PSC_Log_fmt(PSC_L_WARNING, "login: Failed login as %s for %s",
+			user, realm);
+	    }
 	}
 	Session_setProp(session, SK_USER, PSC_copystr(user), free);
 	Authenticator_destroy(auth);

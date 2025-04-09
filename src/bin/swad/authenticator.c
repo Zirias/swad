@@ -1,6 +1,7 @@
 #include "authenticator.h"
 
 #include "middleware/session.h"
+#include "ratelimit.h"
 
 #include <poser/core.h>
 #include <pthread.h>
@@ -8,10 +9,14 @@
 #include <string.h>
 
 #define SESSKEY "swad_authinfo"
+#define SESSBLOCKKEY "swad_auth_blocked"
+#define SESSLIMITKEY "swad_auth_limits"
 
 struct Authenticator
 {
+    Session *session;
     PSC_HashTable *authinfo;
+    PSC_HashTable *blockinfo;
     const char *realm;
 };
 
@@ -57,7 +62,7 @@ static void deleteUser(void *obj)
     free(user);
 }
 
-static void deleteAuthInfo(void *obj)
+static void deleteHT(void *obj)
 {
     PSC_HashTable_destroy(obj);
 }
@@ -73,15 +78,28 @@ static PSC_HashTable *getAuthInfo(Session *session)
     if (!authinfo)
     {
 	authinfo = PSC_HashTable_create(4);
-	Session_setProp(session, SESSKEY, authinfo, deleteAuthInfo);
+	Session_setProp(session, SESSKEY, authinfo, deleteHT);
     }
     return authinfo;
+}
+
+static PSC_HashTable *getBlockInfo(Session *session)
+{
+    PSC_HashTable *blockinfo = Session_getProp(session, SESSBLOCKKEY);
+    if (!blockinfo)
+    {
+	blockinfo = PSC_HashTable_create(4);
+	Session_setProp(session, SESSBLOCKKEY, blockinfo, deleteHT);
+    }
+    return blockinfo;
 }
 
 Authenticator *Authenticator_create(Session *session, const char *realm)
 {
     Authenticator *self = PSC_malloc(sizeof *self);
+    self->session = session;
     self->authinfo = getAuthInfo(session);
+    self->blockinfo = getBlockInfo(session);
     self->realm = realm ? realm : DEFAULT_REALM;
     return self;
 }
@@ -131,11 +149,43 @@ done:
     return user ? 1 : 0;
 }
 
+static void deleteLimit(void *obj)
+{
+    RateLimit_destroy(obj);
+}
+
+static RateLimit *getLimits(Session *session)
+{
+    RateLimit *authLimits = Session_getProp(session, SESSLIMITKEY);
+    if (!authLimits)
+    {
+	RateLimitOpts *limitOpts = RateLimitOpts_create(1);
+	RateLimitOpts_addLimit(limitOpts, 15 * 60, 5);
+	authLimits = RateLimit_create(limitOpts);
+	RateLimitOpts_destroy(limitOpts);
+	Session_setProp(session, SESSLIMITKEY,
+		authLimits, deleteLimit);
+    }
+    return authLimits;
+}
+
 int Authenticator_login(Authenticator *self, const char *user, const char *pw)
 {
     int ok = 0;
     pthread_mutex_lock(&authlock);
     pthread_mutex_lock(&realmlock);
+    if (PSC_HashTable_get(self->blockinfo, user))
+    {
+	if (RateLimit_check(getLimits(self->session), user))
+	{
+	    PSC_HashTable_delete(self->blockinfo, user);
+	}
+	else
+	{
+	    ok = -1;
+	    goto done;
+	}
+    }
     PSC_List *realmConfig = PSC_HashTable_get(realms, self->realm);
     if (!realmConfig || !PSC_List_size(realmConfig)) goto done;
     PSC_ListIterator *i = PSC_List_iterator(realmConfig);
@@ -158,9 +208,19 @@ int Authenticator_login(Authenticator *self, const char *user, const char *pw)
     }
     PSC_ListIterator_destroy(i);
 
+    if (!ok)
+    {
+	if (!RateLimit_check(getLimits(self->session), user))
+	{
+	    ok = -1;
+	    PSC_HashTable_set(self->blockinfo, user, (void *)1, 0);
+	}
+    }
+
 done:
     pthread_mutex_unlock(&realmlock);
     pthread_mutex_unlock(&authlock);
+
     return ok;
 }
 
