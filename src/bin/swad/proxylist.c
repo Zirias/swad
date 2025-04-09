@@ -13,6 +13,7 @@
 #include <strings.h>
 
 #define CTXKEY "_PROXYLIST"
+#define CTXTRKEY "_PROXYLIST_TRUSTED"
 
 #define arraysz(x) (sizeof (x) / sizeof *(x))
 
@@ -325,6 +326,18 @@ const PSC_List *ProxyList_get(HttpContext *context)
 	    deleteRemoteEntry);
     HttpContext_set(context, CTXKEY, proxyList, deleteProxyList);
     return proxyList;
+}
+
+void ProxyList_setTrusted(HttpContext *context, size_t trusted)
+{
+    HttpContext_set(context, CTXTRKEY, (void *)trusted, 0);
+}
+
+size_t ProxyList_firstTrusted(HttpContext *context)
+{
+    size_t ntrusted = (size_t) HttpContext_get(context, CTXTRKEY);
+    size_t nremotes = PSC_List_size(ProxyList_get(context));
+    return nremotes > ntrusted + 1 ? nremotes - ntrusted - 1 : 0;
 }
 
 const char *RemoteEntry_addr(const RemoteEntry *self)

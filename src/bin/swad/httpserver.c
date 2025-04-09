@@ -187,9 +187,7 @@ static void logRequest(HttpServer *self, HttpContext *context)
     size_t raddr_pos = 0;
     const PSC_List *remotes = ProxyList_get(context);
     size_t nremotes = PSC_List_size(remotes);
-    for (size_t i = nremotes > (size_t)(self->trustedProxies + 1) ?
-	    nremotes - self->trustedProxies - 1 : 0;
-	    i < nremotes; ++i)
+    for (size_t i = ProxyList_firstTrusted(context); i < nremotes; ++i)
     {
 	const RemoteEntry *remote = PSC_List_at(remotes, i);
 	const char *addr = RemoteEntry_addr(remote);
@@ -360,6 +358,7 @@ static void requestReceived(void *receiver, void *sender, void *args)
 
 done:
     context = HttpContext_create(req, hdl, self, getMiddlewareAt, conn);
+    ProxyList_setTrusted(context, self->trustedProxies);
     if (!response)
     {
 	ConnectionContext *ctx = PSC_Connection_data(conn);
