@@ -7,7 +7,9 @@
 #include "../http/httprequest.h"
 #include "../http/httpresponse.h"
 #include "../http/httpstatus.h"
+#include "../proxylist.h"
 #include "../random.h"
+#include "../ratelimit.h"
 #include "../util.h"
 #include "cookies.h"
 
@@ -52,6 +54,7 @@ struct Session
 	|| (n) - (s).ctime > MAXAGE)
 
 static Session *buckets[SHT_SIZE];
+static RateLimit *createLimit;
 static pthread_mutex_t bucklocks[SHT_SIZE];
 static time_t cleantime;
 static pthread_mutex_t cleanlock;
@@ -248,6 +251,12 @@ void MW_Session_init(void)
 	pthread_mutex_init(&bucklocks[i], 0);
     }
     cleantime = time(0);
+    RateLimitOpts *opts = RateLimitOpts_create(1);
+    RateLimitOpts_addLimit(opts, 5, 2);
+    RateLimitOpts_addLimit(opts, 60, 5);
+    RateLimitOpts_addLimit(opts, 3600, 15);
+    createLimit = RateLimit_create(opts);
+    RateLimitOpts_destroy(opts);
 }
 
 void MW_Session(HttpContext *context)
@@ -270,6 +279,17 @@ void MW_Session(HttpContext *context)
     }
     else
     {
+	const PSC_List *remotes = ProxyList_get(context);
+	size_t idx = 0;
+	if (PSC_List_size(remotes) > 2) idx = PSC_List_size(remotes) -2;
+	RemoteEntry *r = PSC_List_at(remotes, idx);
+	const char *id = RemoteEntry_addr(r);
+	if (!RateLimit_check(createLimit, id))
+	{
+	    HttpContext_setResponse(context,
+		    HttpResponse_createError(HTTP_TOOMANYREQUESTS, 0));
+	    return;
+	}
 	self = createSession(now);
 	Cookies_setCookie(cookies, COOKIENAME, self->id);
     }
@@ -296,6 +316,7 @@ done:
 
 void MW_Session_done(void)
 {
+    RateLimit_destroy(createLimit);
     for (unsigned i = 0; i < SHT_SIZE; ++i)
     {
 	pthread_mutex_destroy(&bucklocks[i]);
