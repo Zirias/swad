@@ -54,6 +54,7 @@ struct Session
 	|| (n) - (s).ctime > MAXAGE)
 
 static Session *buckets[SHT_SIZE];
+static RateLimitOpts *createLimitOpts;
 static RateLimit *createLimit;
 static pthread_mutex_t bucklocks[SHT_SIZE];
 static time_t cleantime;
@@ -243,6 +244,12 @@ void Session_setProp(Session *self, const char *name,
     pthread_mutex_unlock(&self->lock);
 }
 
+void MW_SessionOpts_addLimit(uint16_t seconds, uint16_t limit)
+{
+    if (!createLimitOpts) createLimitOpts = RateLimitOpts_create(1);
+    RateLimitOpts_addLimit(createLimitOpts, seconds, limit);
+}
+
 void MW_Session_init(void)
 {
     pthread_mutex_init(&cleanlock, 0);
@@ -251,12 +258,14 @@ void MW_Session_init(void)
 	pthread_mutex_init(&bucklocks[i], 0);
     }
     cleantime = time(0);
-    RateLimitOpts *opts = RateLimitOpts_create(1);
-    RateLimitOpts_addLimit(opts, 5, 2);
-    RateLimitOpts_addLimit(opts, 60, 5);
-    RateLimitOpts_addLimit(opts, 3600, 15);
-    createLimit = RateLimit_create(opts);
-    RateLimitOpts_destroy(opts);
+    if (!createLimitOpts)
+    {
+	createLimitOpts = RateLimitOpts_create(1);
+	RateLimitOpts_addLimit(createLimitOpts, 5, 3);
+	RateLimitOpts_addLimit(createLimitOpts, 60, 5);
+	RateLimitOpts_addLimit(createLimitOpts, 3600, 25);
+    }
+    createLimit = RateLimit_create(createLimitOpts);
 }
 
 void MW_Session(HttpContext *context)
@@ -279,10 +288,8 @@ void MW_Session(HttpContext *context)
     }
     else
     {
-	const PSC_List *remotes = ProxyList_get(context);
-	size_t idx = 0;
-	if (PSC_List_size(remotes) > 2) idx = PSC_List_size(remotes) -2;
-	RemoteEntry *r = PSC_List_at(remotes, idx);
+	const RemoteEntry *r = PSC_List_at(
+		ProxyList_get(context), ProxyList_firstTrusted(context));
 	const char *id = RemoteEntry_addr(r);
 	if (!RateLimit_check(createLimit, id))
 	{
@@ -317,6 +324,9 @@ done:
 void MW_Session_done(void)
 {
     RateLimit_destroy(createLimit);
+    RateLimitOpts_destroy(createLimitOpts);
+    createLimit = 0;
+    createLimitOpts = 0;
     for (unsigned i = 0; i < SHT_SIZE; ++i)
     {
 	pthread_mutex_destroy(&bucklocks[i]);
