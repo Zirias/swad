@@ -54,10 +54,35 @@ RateLimit *RateLimit_create(const RateLimitOpts *opts)
     return self;
 }
 
+struct expiredarg
+{
+    const char *id;
+    uint16_t now;
+    uint16_t ncounts;
+};
+
+static int expired(const char *key, void *obj, const void *arg)
+{
+    const struct expiredarg *ea = arg;
+    Entry *e = obj;
+
+    if (strcmp(key, ea->id) && ea->now - e->last >= ea->ncounts) return 1;
+    return 0;
+}
+
 static int checkLimit(Limit *self, struct timespec *ts, const char *id)
 {
     uint16_t now = ts->tv_sec / self->res;
     if (!self->entries) self->entries = PSC_HashTable_create(6);
+    else
+    {
+	struct expiredarg ea = {
+	    .id = id,
+	    .now = now,
+	    .ncounts = self->ncounts
+	};
+	PSC_HashTable_deleteAll(self->entries, expired, &ea);
+    }
     Entry *e = PSC_HashTable_get(self->entries, id);
     if (!e)
     {
