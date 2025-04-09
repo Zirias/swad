@@ -52,7 +52,15 @@ static void prestartup(void *receiver, void *sender, void *args)
     PSC_EAStartup *ea = args;
 
     MW_FormData_setValidation(FDV_UTF8_SANITIZE);
+
+    uint16_t seconds;
+    uint16_t limit;
+    for (size_t i = 0; Config_sessionLimit(i, &seconds, &limit); ++i)
+    {
+	MW_SessionOpts_addLimit(seconds, limit);
+    }
     MW_Session_init();
+
     Authenticator_init();
 
     const CfgChecker *c;

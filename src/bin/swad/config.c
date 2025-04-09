@@ -78,6 +78,9 @@ static long gid = -1;
 static int resolveHosts = -1;
 static int foreground = 0;
 static int verbose = 0;
+static size_t nsessionLimits = 0;
+static uint16_t sessionSeconds[8];
+static uint16_t sessionLimits[8];
 
 static unsigned lineno;
 static CfgSection section;
@@ -401,16 +404,38 @@ static void readOption(char *lp)
     }
     if (!strcmp(key, "resolveHosts"))
     {
-	if (resolveHosts < 0 && boolArg(&resolveHosts, value) < 0)
+	if (resolveHosts < 0 && boolArg(&resolveHosts, value) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "session_limit"))
+    {
+	if (nsessionLimits == sizeof sessionLimits)
 	{
-	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] invalid setting `%s'"
-		    "for %s, ignoring", cfgfile, lineno, value, key);
+	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] too many session "
+		    "limit entries, ignoring", cfgfile, lineno);
+	    return;
 	}
+	char *limitstr = strchr(value, ':');
+	if (!limitstr) goto inval;
+	*limitstr = 0;
+	int pval;
+	int rc = intArg(&pval, value, 1, 86400, 10);
+	*limitstr++ = ':';
+	if (rc < 0) goto inval;
+	sessionSeconds[nsessionLimits] = pval;
+	if (intArg(&pval, limitstr, 1, 1024, 10) < 0) goto inval;
+	sessionLimits[nsessionLimits] = pval;
+	++nsessionLimits;
 	return;
     }
 
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown global option `%s', "
 	    "ignoring", cfgfile, lineno, key);
+    return;
+
+inval:
+    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] invalid setting `%s' for %s, "
+	    "ignoring", cfgfile, lineno, value, key);
 }
 
 static CfgSection readSection(char *lp)
@@ -817,6 +842,14 @@ int Config_verbose(void)
     return verbose;
 }
 
+int Config_sessionLimit(size_t num, uint16_t *seconds, uint16_t *limit)
+{
+    if (num >= nsessionLimits) return 0;
+    *seconds = sessionSeconds[num];
+    *limit = sessionLimits[num];
+    return 1;
+}
+
 void Config_done(void)
 {
     for (size_t i = 0; i < realms_count; ++i)
@@ -879,5 +912,6 @@ void Config_done(void)
     resolveHosts = -1;
     foreground = 0;
     verbose = 0;
+    nsessionLimits = 0;
 }
 

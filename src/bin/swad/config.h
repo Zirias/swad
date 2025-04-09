@@ -4,6 +4,7 @@
 #include <poser/core/proto.h>
 #include <poser/decl.h>
 #include <stddef.h>
+#include <stdint.h>
 
 C_CLASS_DECL(CfgChecker);
 C_CLASS_DECL(CfgRealm);
@@ -46,6 +47,7 @@ const char *Config_pidfile(void) ATTR_RETNONNULL;
 int Config_resolveHosts(void);
 int Config_foreground(void);
 int Config_verbose(void);
+int Config_sessionLimit(size_t num, uint16_t *seconds, uint16_t *limit);
 
 void Config_done(void);
 

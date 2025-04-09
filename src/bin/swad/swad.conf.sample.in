@@ -39,6 +39,24 @@
 # host.
 ; resolveHosts = off
 
+# Rate limit creation of new sessions
+#
+# Determines the maximum rates for creating new sessions allowed per remote
+# host, can be given up to 8 times. Each value is of the form
+# `<seconds>:<limit>`, meaning to allow at most <limit> new sessions to be
+# created within <seconds> seconds. <seconds> must be in the range [1-86400],
+# <limit> in the range [1-1024].
+#
+# The remote host for these limits is determined based on the
+# `trusted_proxies` setting of the server.
+#
+# If not given, a default of 3 in 5 seconds, 5 per minute and 25 per hour is
+# used.
+#
+; session_limit = 5:3
+; session_limit = 60:5
+; session_limit = 3600:25
+
 # ============================================================================
 
 # Server(s).
