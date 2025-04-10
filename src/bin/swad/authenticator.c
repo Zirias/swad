@@ -30,8 +30,16 @@ struct User
     const char *checker;
 };
 
+struct Realm
+{
+    const char *name;
+    PSC_List *checkers;
+    RateLimitOpts *limitOpts;
+};
+
 static PSC_HashTable *checkers;
 static PSC_HashTable *realms;
+static RateLimitOpts *defaultLimitOpts;
 
 static pthread_mutex_t checkerlock;
 static pthread_mutex_t realmlock;
@@ -65,6 +73,15 @@ static void deleteUser(void *obj)
     free(user);
 }
 
+static void deleteRealm(void *obj)
+{
+    if (!obj) return;
+    Realm *realm = obj;
+    RateLimitOpts_destroy(realm->limitOpts);
+    PSC_List_destroy(realm->checkers);
+    free(realm);
+}
+
 static void deleteAuthInfo(void *obj)
 {
     if (!obj) return;
@@ -78,11 +95,6 @@ static void deleteAuthInfo(void *obj)
 static void deleteAuthInfos(void *obj)
 {
     PSC_HashTable_destroy(obj);
-}
-
-static void deleteRealmConfig(void *obj)
-{
-    PSC_List_destroy(obj);
 }
 
 static PSC_HashTable *getAuthInfos(Session *session)
@@ -139,9 +151,9 @@ int Authenticator_silentLogin(Authenticator *self)
     PSC_ListIterator *j = 0;
     AuthInfo *authInfo = getAuthInfo(self, 0);
     if (!authInfo || authInfo->user) goto done;
-    PSC_List *realmConfig = PSC_HashTable_get(realms, self->realm);
-    if (!realmConfig || PSC_List_size(realmConfig) == 0) goto done;
-    j = PSC_List_iterator(realmConfig);
+    Realm *realm = PSC_HashTable_get(realms, self->realm);
+    if (!realm || PSC_List_size(realm->checkers) == 0) goto done;
+    j = PSC_List_iterator(realm->checkers);
     for (i = PSC_HashTable_iterator(self->authInfos);
 	    PSC_HashTableIterator_moveNext(i); )
     {
@@ -164,15 +176,22 @@ done:
     return ok;
 }
 
-static RateLimit *getLimits(Authenticator *self)
+static RateLimit *getLimits(Authenticator *self, Realm *realm)
 {
     AuthInfo *authInfo = getAuthInfo(self, 1);
     if (!authInfo->failLimit)
     {
-	RateLimitOpts *limitOpts = RateLimitOpts_create(1);
-	RateLimitOpts_addLimit(limitOpts, 15 * 60, 5);
+	RateLimitOpts *limitOpts = realm->limitOpts;
+	if (!limitOpts)
+	{
+	    if (!defaultLimitOpts)
+	    {
+		defaultLimitOpts = RateLimitOpts_create(0);
+		RateLimitOpts_addLimit(defaultLimitOpts, 15 * 60, 5);
+	    }
+	    limitOpts = defaultLimitOpts;
+	}
 	authInfo->failLimit = RateLimit_create(limitOpts);
-	RateLimitOpts_destroy(limitOpts);
     }
     return authInfo->failLimit;
 }
@@ -182,11 +201,13 @@ int Authenticator_login(Authenticator *self, const char *user, const char *pw)
     int ok = 0;
     pthread_mutex_lock(&authlock);
     pthread_mutex_lock(&realmlock);
+    Realm *realm = PSC_HashTable_get(realms, self->realm);
+    if (!realm || !PSC_List_size(realm->checkers)) goto done;
     AuthInfo *authInfo = getAuthInfo(self, 0);
     if (authInfo && authInfo->blocks &&
 	    PSC_HashTable_get(authInfo->blocks, user))
     {
-	if (RateLimit_check(getLimits(self), user))
+	if (RateLimit_check(getLimits(self, realm), user))
 	{
 	    PSC_HashTable_delete(authInfo->blocks, user);
 	}
@@ -196,9 +217,7 @@ int Authenticator_login(Authenticator *self, const char *user, const char *pw)
 	    goto done;
 	}
     }
-    PSC_List *realmConfig = PSC_HashTable_get(realms, self->realm);
-    if (!realmConfig || !PSC_List_size(realmConfig)) goto done;
-    PSC_ListIterator *i = PSC_List_iterator(realmConfig);
+    PSC_ListIterator *i = PSC_List_iterator(realm->checkers);
     while (!ok && PSC_ListIterator_moveNext(i))
     {
 	const char *checkerName = PSC_ListIterator_current(i);
@@ -221,7 +240,7 @@ int Authenticator_login(Authenticator *self, const char *user, const char *pw)
 
     if (!ok)
     {
-	if (!RateLimit_check(getLimits(self), user))
+	if (!RateLimit_check(getLimits(self, realm), user))
 	{
 	    ok = -1;
 	    if (!authInfo) authInfo = getAuthInfo(self, 1);
@@ -264,6 +283,26 @@ const char *User_realname(const User *self)
     return self->realname;
 }
 
+Realm *Realm_create(const char *name)
+{
+    Realm *self = PSC_malloc(sizeof *self);
+    self->name = name;
+    self->checkers = PSC_List_create();
+    self->limitOpts = 0;
+    return self;
+}
+
+void Realm_addChecker(Realm *self, const char *checker)
+{
+    PSC_List_append(self->checkers, PSC_copystr(checker), free);
+}
+
+void Realm_addLimit(Realm *self, uint16_t seconds, uint16_t limit)
+{
+    if (!self->limitOpts) self->limitOpts = RateLimitOpts_create(0);
+    RateLimitOpts_addLimit(self->limitOpts, seconds, limit);
+}
+
 void Authenticator_init(void)
 {
     checkers = PSC_HashTable_create(4);
@@ -271,6 +310,14 @@ void Authenticator_init(void)
     pthread_mutex_init(&checkerlock, 0);
     pthread_mutex_init(&realmlock, 0);
     pthread_mutex_init(&authlock, 0);
+}
+
+void Authenticator_addDefaultLimit(uint16_t seconds, uint16_t limit)
+{
+    pthread_mutex_lock(&realmlock);
+    if (!defaultLimitOpts) defaultLimitOpts = RateLimitOpts_create(0);
+    RateLimitOpts_addLimit(defaultLimitOpts, seconds, limit);
+    pthread_mutex_unlock(&realmlock);
 }
 
 void Authenticator_registerChecker(
@@ -281,16 +328,10 @@ void Authenticator_registerChecker(
     pthread_mutex_unlock(&checkerlock);
 }
 
-void Authenticator_configureRealm(const char *realm, const char *checker)
+void Authenticator_registerRealm(Realm *realm)
 {
     pthread_mutex_lock(&realmlock);
-    PSC_List *realmConfig = PSC_HashTable_get(realms, realm);
-    if (!realmConfig)
-    {
-	realmConfig = PSC_List_create();
-	PSC_HashTable_set(realms, realm, realmConfig, deleteRealmConfig);
-    }
-    PSC_List_append(realmConfig, PSC_copystr(checker), free);
+    PSC_HashTable_set(realms, realm->name, realm, deleteRealm);
     pthread_mutex_unlock(&realmlock);
 }
 
@@ -301,5 +342,7 @@ void Authenticator_done(void)
     pthread_mutex_destroy(&checkerlock);
     PSC_HashTable_destroy(realms);
     PSC_HashTable_destroy(checkers);
+    RateLimitOpts_destroy(defaultLimitOpts);
+    defaultLimitOpts = 0;
 }
 

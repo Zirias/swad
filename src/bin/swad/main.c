@@ -82,11 +82,13 @@ static void prestartup(void *receiver, void *sender, void *args)
     const CfgRealm *r;
     for (size_t i = 0; (r = Config_realm(i)); ++i)
     {
+	Realm *realm = Realm_create(CfgRealm_name(r));
 	const char *cname;
 	for (size_t j = 0; (cname = CfgRealm_checker(r, j)); ++j)
 	{
-	    Authenticator_configureRealm(CfgRealm_name(r), cname);
+	    Realm_addChecker(realm, cname);
 	}
+	Authenticator_registerRealm(realm);
     }
 
     const CfgServer *s;
