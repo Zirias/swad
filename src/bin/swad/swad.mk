@@ -3,7 +3,7 @@ GEN_BIN2CSTR_args=	$1 $2
 GEN_CHELP_tool=		$(MKCLIDOC_TARGET)
 GEN_CHELP_args=		-fcpp -o$1 $2
 
-swad_VERSION=		0.1
+swad_VERSION=		0.2
 swad_MODULES=		authenticator \
 			config \
 			base64 \
