@@ -28,6 +28,8 @@ const char *CfgChecker_arg(const CfgChecker *self, size_t num) CMETHOD;
 const CfgRealm *Config_realm(size_t num);
 const char *CfgRealm_name(const CfgRealm *self) CMETHOD ATTR_RETNONNULL;
 const char *CfgRealm_checker(const CfgRealm *self, size_t num) CMETHOD;
+int CfgRealm_loginFailLimit(const CfgRealm *self, size_t num,
+	uint16_t *seconds, uint16_t *limit) CMETHOD;
 
 const CfgServer *Config_server(size_t num);
 const char *CfgServer_name(const CfgServer *self) CMETHOD;
@@ -48,6 +50,7 @@ int Config_resolveHosts(void);
 int Config_foreground(void);
 int Config_verbose(void);
 int Config_sessionLimit(size_t num, uint16_t *seconds, uint16_t *limit);
+int Config_loginFailLimit(size_t num, uint16_t *seconds, uint16_t *limit);
 
 void Config_done(void);
 

@@ -61,6 +61,10 @@ static void prestartup(void *receiver, void *sender, void *args)
     }
     MW_Session_init();
 
+    for (size_t i = 0; Config_loginFailLimit(i, &seconds, &limit); ++i)
+    {
+	Authenticator_addDefaultLimit(seconds, limit);
+    }
     Authenticator_init();
 
     const CfgChecker *c;
@@ -87,6 +91,11 @@ static void prestartup(void *receiver, void *sender, void *args)
 	for (size_t j = 0; (cname = CfgRealm_checker(r, j)); ++j)
 	{
 	    Realm_addChecker(realm, cname);
+	}
+	for (size_t j = 0;
+		CfgRealm_loginFailLimit(r, j, &seconds, &limit); ++j)
+	{
+	    Realm_addLimit(realm, seconds, limit);
 	}
 	Authenticator_registerRealm(realm);
     }

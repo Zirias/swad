@@ -58,6 +58,19 @@
 ; session_limit = 60:5
 ; session_limit = 3600:25
 
+# Rate limit login failures
+#
+# This is the default rate limit for failed logins. It follows the same syntax
+# like the `session_limit` above and can be overridden per realm, see below.
+#
+# The limit is set per session and username, and when it is reached, no more
+# logins are performed and an appropriate error message is displayed.
+# It doesn't matter whether the username actually exists.
+#
+# If not given, a default of at most 5 failed logins in 15 minutes is used.
+#
+; login_fail_limit = 900:5
+
 # ============================================================================
 
 # Server(s).
@@ -176,10 +189,15 @@
 # requested, swad uses a default realm named SWAD, so configure this one if
 # you intend to use it.
 #
+# It's also possible to configure an individual rate limit for failed logins
+# on a realm by adding up to 8 settings for `<name>_login_fail_limit`,
+# overriding the default from `login_fail_limit`.
+#
 # Example:
 #
 # [realms]
 # MySecretService = pam_system
+# MySecretService_login_fail_limit = 1800:3
 #
 [realms]
 ; SWAD = dummy

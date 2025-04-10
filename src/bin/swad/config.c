@@ -32,6 +32,9 @@ struct CfgRealm
 {
     char *name;
     size_t ncheckers;
+    size_t nlimits;
+    uint16_t seconds[8];
+    uint16_t limits[8];
     char *checkers[];
 };
 
@@ -81,6 +84,9 @@ static int verbose = 0;
 static size_t nsessionLimits = 0;
 static uint16_t sessionSeconds[8];
 static uint16_t sessionLimits[8];
+static size_t nloginLimits = 0;
+static uint16_t loginSeconds[8];
+static uint16_t loginLimits[8];
 
 static unsigned lineno;
 static CfgSection section;
@@ -127,6 +133,24 @@ static int boolArg(int *setting, const char *str)
 	return 0;
     }
     return -1;
+}
+
+static int limitsArg(uint16_t *seconds, uint16_t *limit, char *value)
+{
+    int rc = -1;
+    char *limitstr = strchr(value, ':');
+    if (!limitstr) goto done;
+    *limitstr = 0;
+    int pval;
+    rc = intArg(&pval, value, 1, 86400, 10);
+    *limitstr++ = ':';
+    if (rc < 0) goto done;
+    *seconds = pval;
+    rc = intArg(&pval, limitstr, 1, 1024, 10);
+    if (rc < 0) goto done;
+    *limit = pval;
+done:
+    return rc;
 }
 
 static int readKeyValue(char *lp, char **key, char **value)
@@ -237,6 +261,41 @@ static void readRealm(char *lp)
     char *value;
     if (!readKeyValue(lp, &key, &value)) return;
 
+    char *opt = strstr(key, "_login_fail_limit");
+    if (opt && strlen(opt) == sizeof "_login_fail_limit" - 1)
+    {
+	*opt++ = 0;
+	CfgRealm *realm = 0;
+	for (size_t i = 0; i < realms_count; ++i)
+	{
+	    if (!strcmp(realms[i]->name, key))
+	    {
+		realm = realms[i];
+		break;
+	    }
+	}
+	if (!realm)
+	{
+	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] %s for unknown realm "
+		    "`%s' found, ignoring", cfgfile, lineno, opt, key);
+	    return;
+	}
+	if (realm->nlimits == sizeof realm->limits)
+	{
+	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] too many login fail "
+		    "limit entries, ignoring", cfgfile, lineno);
+	    return;
+	}
+	if (limitsArg(realm->seconds + realm->nlimits,
+		    realm->limits + realm->nlimits, value) < 0)
+	{
+	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] invalid setting `%s' "
+		    "for %s, ignoring", cfgfile, lineno, value, opt);
+	}
+	++realm->nlimits;
+	return;
+    }
+
     char *chck[8];
     size_t nchck = 0;
     char *checker;
@@ -256,6 +315,7 @@ static void readRealm(char *lp)
 	    + nchck * sizeof *realm->checkers);
     realm->name = PSC_copystr(key);
     realm->ncheckers = nchck;
+    realm->nlimits = 0;
     for (size_t i = 0; i < nchck; ++i)
     {
 	realm->checkers[i] = PSC_copystr(chck[i]);
@@ -415,17 +475,22 @@ static void readOption(char *lp)
 		    "limit entries, ignoring", cfgfile, lineno);
 	    return;
 	}
-	char *limitstr = strchr(value, ':');
-	if (!limitstr) goto inval;
-	*limitstr = 0;
-	int pval;
-	int rc = intArg(&pval, value, 1, 86400, 10);
-	*limitstr++ = ':';
-	if (rc < 0) goto inval;
-	sessionSeconds[nsessionLimits] = pval;
-	if (intArg(&pval, limitstr, 1, 1024, 10) < 0) goto inval;
-	sessionLimits[nsessionLimits] = pval;
+	if (limitsArg(sessionSeconds + nsessionLimits,
+		    sessionLimits + nsessionLimits, value) < 0) goto inval;
 	++nsessionLimits;
+	return;
+    }
+    if (!strcmp(key, "login_fail_limit"))
+    {
+	if (nloginLimits == sizeof loginLimits)
+	{
+	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] too many login fail "
+		    "limit entries, ignoring", cfgfile, lineno);
+	    return;
+	}
+	if (limitsArg(loginSeconds + nloginLimits,
+		    loginLimits + nloginLimits, value) < 0) goto inval;
+	++nloginLimits;
 	return;
     }
 
@@ -757,6 +822,15 @@ const char *CfgRealm_checker(const CfgRealm *self, size_t num)
     return self->checkers[num];
 }
 
+int CfgRealm_loginFailLimit(const CfgRealm *self, size_t num,
+	uint16_t *seconds, uint16_t *limit)
+{
+    if (num >= self->nlimits) return 0;
+    *seconds = self->seconds[num];
+    *limit = self->limits[num];
+    return 1;
+}
+
 const CfgServer *Config_server(size_t num)
 {
     if (num >= servers_count) return 0;
@@ -850,6 +924,14 @@ int Config_sessionLimit(size_t num, uint16_t *seconds, uint16_t *limit)
     return 1;
 }
 
+int Config_loginFailLimit(size_t num, uint16_t *seconds, uint16_t *limit)
+{
+    if (num >= nloginLimits) return 0;
+    *seconds = loginSeconds[num];
+    *limit = loginLimits[num];
+    return 1;
+}
+
 void Config_done(void)
 {
     for (size_t i = 0; i < realms_count; ++i)
@@ -913,5 +995,6 @@ void Config_done(void)
     foreground = 0;
     verbose = 0;
     nsessionLimits = 0;
+    nloginLimits = 0;
 }
 
