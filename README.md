@@ -11,6 +11,9 @@ sub-requests for authentication, like nginx' `auth_request` module.
   to try for that realm
 * Optional HTTPS support
 * Protection against CSRF (Cross-site request forgery)
+* Configurable rate-limit for creating new sessions (protect against DoS)
+* Configurable rate-limit for failed logins per session, realm and user name
+  (protect against brute-force)
 * Redirects back to the page that triggered the login
 
 ### Available credential checker modules
@@ -129,6 +132,8 @@ Some key aspects to make this work are:
 * We always pass the realm and redirect uri with every request checking
   authentication. This makes sure a login will use whatever was requested
   last when authentication failed.
+* We always add an `X-Forwarded-For` header, so `swad` knows the real remote
+  address and can base its rate limits on this information, as well as log it.
 * We provide a redirect to login in nginx, via `proxy_intercept_errors` and
   `@auth403` for the error document. This is unfortunately necessery,
   because nginx' `auth_request` can't pass a body from a `403` response, which
@@ -136,10 +141,27 @@ Some key aspects to make this work are:
 * We make sure to force the `GET` method and no request body for auth
   requests. `swad`'s authentication endpoint only supports `GET`.
 
-A few aspects of this config aren't strictly required, but make things nicer:
+A few settings aren't strictly required, but make things nicer: We disable any
+caching for the `/secret` route, so e.g. an expired `swad` session is
+discovered immediately and performs a redirect to `/login`.
 
-* We always add an `X-Forwarded-For` header, enabling `swad` to log the real
-  address of clients doing authentication and login.
-* We disable any caching for the `/secret` route, so e.g. an expired `swad`
-  session is discovered immediately and performs a redirect to `/login`.
+Here's a minimal `swad.conf` example to match this nginx configuration:
+
+```ini
+user = swad		; use some unprivileged user here to drop privileges
+
+[server]
+port = 8443
+tls = on
+tls_cert_file = /usr/local/etc/swad/swad.crt
+tls_key_file = /usr/local/etc/swad/swad.key
+trusted_proxies = 1
+trusted_header = xfwd
+
+[checkers]
+pam_swad = pam:swad
+
+[realms]
+Secret = pam_swad
+```
 
