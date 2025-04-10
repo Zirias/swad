@@ -41,6 +41,7 @@ struct HttpServer
     size_t routescapa;
     size_t middlewarescount;
     size_t middlewarescapa;
+    ProxyHeader trustedHeader;
     int trustedProxies;
 };
 
@@ -48,6 +49,7 @@ struct HttpServerOpts
 {
     PSC_TcpServerOpts *serverOpts;
     const IpAddr *nat64Prefix;
+    ProxyHeader trustedHeader;
     int trustedProxies;
 };
 
@@ -358,7 +360,7 @@ static void requestReceived(void *receiver, void *sender, void *args)
 
 done:
     context = HttpContext_create(req, hdl, self, getMiddlewareAt, conn);
-    ProxyList_setTrusted(context, self->trustedProxies);
+    ProxyList_setTrusted(context, self->trustedHeader, self->trustedProxies);
     if (!response)
     {
 	ConnectionContext *ctx = PSC_Connection_data(conn);
@@ -406,6 +408,7 @@ HttpServerOpts *HttpServerOpts_create(int port)
     HttpServerOpts *self = PSC_malloc(sizeof *self);
     self->serverOpts = PSC_TcpServerOpts_create(port);
     self->nat64Prefix = 0;
+    self->trustedHeader = PH_XFWD | PH_RFC;
     self->trustedProxies = 0;
     return self;
 }
@@ -437,6 +440,11 @@ void HttpServerOpts_trustedProxies(HttpServerOpts *self, int num)
     self->trustedProxies = num;
 }
 
+void HttpServerOpts_trustedHeader(HttpServerOpts *self, ProxyHeader trusted)
+{
+    self->trustedHeader = trusted;
+}
+
 void HttpServerOpts_nat64Prefix(HttpServerOpts *self, const IpAddr *prefix)
 {
     self->nat64Prefix = prefix;
@@ -464,6 +472,7 @@ HttpServer *HttpServer_create(const HttpServerOpts *opts)
     self->routescapa = ROUTESCHUNK;
     self->middlewarescount = 0;
     self->middlewarescapa = MIDDLEWARESCHUNK;
+    self->trustedHeader = opts->trustedHeader;
     self->trustedProxies = opts->trustedProxies;
 
     PSC_Event_register(PSC_Server_clientConnected(server), self,

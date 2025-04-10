@@ -131,6 +131,22 @@
 #
 ; trusted_proxies = 0
 
+# Which header to trust from proxies.
+#
+# Control which header(s) to consider for getting remote address information
+# from proxies. The following values are accepted:
+#
+#   xfwd		Only trust "X-Forwarded-For"
+#   rfc			Only trust "Forwarded" (RFC 7239)
+#   prefer_xfwd		Trust both, check "X-Forwarded-For" first
+#   prefer_rfc		Trust both, check "Forwarded" first
+#
+# In general, you should at least prefer the header you know your reverse
+# proxy writes. In any case, swad only uses information from one of these
+# headers.
+#
+; trusted_header = prefer_xfwd
+
 # NAT64 prefix.
 #
 # This is used to translate NAT64 addresses back to IPv4 addresses. The

@@ -47,6 +47,7 @@ struct CfgServer
     char **listen;
     size_t nlisten;
     PSC_Proto proto;
+    ProxyHeader trustedHeader;
     int port;
     int tls;
     int trustedProxies;
@@ -204,6 +205,7 @@ static CfgServer *getServer(const char *name)
 	memset(s, 0, sizeof *s);
 	if (name) s->name = PSC_copystr(name);
 	s->port = 8080;
+	s->trustedHeader = PH_XFWD | PH_RFC;
 	if (servers_count == servers_capa)
 	{
 	    servers_capa += 8;
@@ -375,6 +377,21 @@ static void readServer(char *lp)
     if (!strcmp(key, "trusted_proxies"))
     {
 	if (intArg(&server->trustedProxies, value, 0, 16, 10) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "trusted_header"))
+    {
+	if (!strcmp(value, "xfwd")) server->trustedHeader = PH_XFWD;
+	else if (!strcmp(value, "rfc")) server->trustedHeader = PH_RFC;
+	else if (!strcmp(value, "prefer_xfwd"))
+	{
+	    server->trustedHeader = PH_XFWD | PH_RFC;
+	}
+	else if (!strcmp(value, "prefer_rfc"))
+	{
+	    server->trustedHeader = PH_XFWD | PH_RFC | PH_PREFRFC;
+	}
+	else goto inval;
 	return;
     }
     if (!strcmp(key, "nat64_prefix"))
@@ -876,6 +893,11 @@ const char *CfgServer_tlsKey(const CfgServer *self)
 int CfgServer_trustedProxies(const CfgServer *self)
 {
     return self->trustedProxies;
+}
+
+ProxyHeader CfgServer_trustedHeader(const CfgServer *self)
+{
+    return self->trustedHeader;
 }
 
 const IpAddr *CfgServer_nat64Prefix(const CfgServer *self)

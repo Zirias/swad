@@ -1,6 +1,8 @@
 #ifndef SWAD_CONFIG_H
 #define SWAD_CONFIG_H
 
+#include "proxyheader.h"
+
 #include <poser/core/proto.h>
 #include <poser/decl.h>
 #include <stddef.h>
@@ -40,6 +42,7 @@ int CfgServer_tls(const CfgServer *self) CMETHOD;
 const char *CfgServer_tlsCert(const CfgServer *self) CMETHOD;
 const char *CfgServer_tlsKey(const CfgServer *self) CMETHOD;
 int CfgServer_trustedProxies(const CfgServer *self) CMETHOD;
+ProxyHeader CfgServer_trustedHeader(const CfgServer *self) CMETHOD;
 const IpAddr *CfgServer_nat64Prefix(const CfgServer *self)
     CMETHOD ATTR_RETNONNULL;
 

@@ -1,6 +1,8 @@
 #ifndef SWAD_PROXYLIST_H
 #define SWAD_PROXYLIST_H
 
+#include "proxyheader.h"
+
 #include <poser/decl.h>
 #include <stddef.h>
 
@@ -9,7 +11,8 @@ C_CLASS_DECL(PSC_List);
 C_CLASS_DECL(RemoteEntry);
 
 const PSC_List *ProxyList_get(HttpContext *context) CMETHOD ATTR_RETNONNULL;
-void ProxyList_setTrusted(HttpContext *context, size_t trusted) CMETHOD;
+void ProxyList_setTrusted(HttpContext *context, ProxyHeader header,
+	size_t ntrusted) CMETHOD;
 size_t ProxyList_firstTrusted(HttpContext *context) CMETHOD;
 
 const char *RemoteEntry_addr(const RemoteEntry *self) CMETHOD ATTR_RETNONNULL;

@@ -17,6 +17,12 @@
 
 #define arraysz(x) (sizeof (x) / sizeof *(x))
 
+typedef struct TrustConfig
+{
+    size_t ntrusted;
+    ProxyHeader header;
+} TrustConfig;
+
 struct RemoteEntry
 {
     char *addr;
@@ -309,14 +315,32 @@ const PSC_List *ProxyList_get(HttpContext *context)
 {
     PSC_List *proxyList = HttpContext_get(context, CTXKEY);
     if (proxyList) return proxyList;
+    ProxyHeader trustedHeader = PH_XFWD | PH_RFC;
+    TrustConfig *trusted = HttpContext_get(context, CTXTRKEY);
+    if (trusted) trustedHeader = trusted->header;
+
+    static const char *headernm[] = {
+	"X-Forwarded-For",
+	"Forwarded"
+    };
+
     const HeaderSet *hdrs = HttpRequest_headers(HttpContext_request(context));
-    HeaderIterator *i = HeaderSet_any(hdrs, "Forwarded");
-    proxyList = proxyAddr(i, 1);
-    HeaderIterator_destroy(i);
-    if (!proxyList)
+    int rfc7239 = !!(trustedHeader & PH_PREFRFC);
+    HeaderIterator *i = 0;
+    if ((!rfc7239 && (trustedHeader & PH_XFWD)) ||
+	    (rfc7239 && (trustedHeader & PH_RFC)))
     {
-	i = HeaderSet_any(hdrs, "X-Forwarded-For");
-	proxyList = proxyAddr(i, 0);
+	i = HeaderSet_any(hdrs, headernm[rfc7239]);
+	proxyList = proxyAddr(i, rfc7239);
+	HeaderIterator_destroy(i);
+    }
+    rfc7239 = !rfc7239;
+    if (!proxyList &&
+	    ((!rfc7239 && (trustedHeader & PH_XFWD)) ||
+	     (rfc7239 && (trustedHeader & PH_RFC))))
+    {
+	i = HeaderSet_any(hdrs, headernm[rfc7239]);
+	proxyList = proxyAddr(i, rfc7239);
 	HeaderIterator_destroy(i);
     }
     if (!proxyList) proxyList = PSC_List_create();
@@ -328,14 +352,20 @@ const PSC_List *ProxyList_get(HttpContext *context)
     return proxyList;
 }
 
-void ProxyList_setTrusted(HttpContext *context, size_t trusted)
+void ProxyList_setTrusted(HttpContext *context, ProxyHeader header,
+	size_t ntrusted)
 {
-    HttpContext_set(context, CTXTRKEY, (void *)trusted, 0);
+    TrustConfig *trusted = PSC_malloc(sizeof *trusted);
+    trusted->header = header;
+    trusted->ntrusted = ntrusted;
+    HttpContext_set(context, CTXTRKEY, trusted, free);
 }
 
 size_t ProxyList_firstTrusted(HttpContext *context)
 {
-    size_t ntrusted = (size_t) HttpContext_get(context, CTXTRKEY);
+    size_t ntrusted = 0;
+    TrustConfig *cfg = HttpContext_get(context, CTXTRKEY);
+    if (cfg) ntrusted = cfg->ntrusted;
     size_t nremotes = PSC_List_size(ProxyList_get(context));
     return nremotes > ntrusted + 1 ? nremotes - ntrusted - 1 : 0;
 }

@@ -3,6 +3,7 @@
 
 #include "http/httpmethod.h"
 #include "http/httpstatus.h"
+#include "proxyheader.h"
 
 #include <poser/decl.h>
 #include <poser/core/log.h>
@@ -29,6 +30,8 @@ void HttpServerOpts_enableTls(HttpServerOpts *self,
 void HttpServerOpts_numericHosts(HttpServerOpts *self) CMETHOD;
 void HttpServerOpts_setProto(HttpServerOpts *self, PSC_Proto proto) CMETHOD;
 void HttpServerOpts_trustedProxies(HttpServerOpts *self, int num) CMETHOD;
+void HttpServerOpts_trustedHeader(HttpServerOpts *self, ProxyHeader trusted)
+    CMETHOD;
 void HttpServerOpts_nat64Prefix(HttpServerOpts *self, const IpAddr *prefix)
     CMETHOD ATTR_NONNULL((2));
 void HttpServerOpts_destroy(HttpServerOpts *self);
