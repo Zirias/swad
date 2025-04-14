@@ -1,209 +1,177 @@
+#define _POSIX_C_SOURCE 200112L
 #include "headerset.h"
-#include "header.h"
-#include "../util.h"
 
-#include <poser/core/util.h>
+#include "header.h"
+
+#include <poser/core.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define HSHT_BITS 5
-#define HSHT_SIZE HT_SIZE(HSHT_BITS)
+#include <strings.h>
 
 typedef struct HeaderSetEntry HeaderSetEntry;
 
 struct HeaderSetEntry
 {
-    char *key;
     Header *header;
     HeaderSetEntry *next;
 };
 
 struct HeaderSet
 {
-    size_t count;
-    HeaderSetEntry *buckets[HSHT_SIZE];
-    uint16_t size;
+    PSC_HashTable *entries;
+    size_t size;
 };
 
 struct HeaderIterator
 {
-    const HeaderSet *headerSet;
-    char *key;
-    const HeaderSetEntry *entry;
-    uint8_t hash;
+    PSC_HashTableIterator *iter;
+    HeaderSetEntry *first;
+    HeaderSetEntry *current;
 };
 
-static void removeEntry(HeaderSet *self, uint8_t hash,
-	HeaderSetEntry *parent, HeaderSetEntry *entry)
-    CMETHOD ATTR_NONNULL((4));
-
-static void removeEntry(HeaderSet *self, uint8_t hash,
-	HeaderSetEntry *parent, HeaderSetEntry *entry)
+static void entryDeleter(void *obj)
 {
-    --self->count;
-    self->size -= Header_size(entry->header);
-    Header_destroy(entry->header);
-    if (parent) parent->next = entry->next;
-    else self->buckets[hash] = entry->next;
-    free(entry->key);
-    free(entry);
+    if (!obj) return;
+    HeaderSetEntry *entry = obj;
+    while (entry)
+    {
+	HeaderSetEntry *next = entry->next;
+	Header_destroy(entry->header);
+	free(entry);
+	entry = next;
+    }
 }
 
 HeaderSet *HeaderSet_create(void)
 {
     HeaderSet *self = PSC_malloc(sizeof *self);
-    memset(self, 0, sizeof *self);
+    self->entries = PSC_HashTable_create(5);
+    self->size = 0;
     return self;
 }
 
 void HeaderSet_set(HeaderSet *self, Header *header)
 {
-    HeaderSet_removeAll(self, Header_name(header));
-    HeaderSet_add(self, header);
+    char *key = PSC_lowerstr(Header_name(header));
+    HeaderSetEntry *old = PSC_HashTable_get(self->entries, key);
+    while (old)
+    {
+	self->size -= Header_size(old->header);
+    }
+    HeaderSetEntry *entry = PSC_malloc(sizeof *entry);
+    entry->header = header;
+    entry->next = 0;
+    PSC_HashTable_set(self->entries, key, entry, entryDeleter);
+    self->size += Header_size(header);
+    free(key);
 }
 
 void HeaderSet_add(HeaderSet *self, Header *header)
 {
+    char *key = PSC_lowerstr(Header_name(header));
     HeaderSetEntry *entry = PSC_malloc(sizeof *entry);
-    entry->key = lowerstr(Header_name(header));
     entry->header = header;
     entry->next = 0;
-
-    uint8_t hashval = hash(entry->key, HSHT_BITS);
-    if (self->buckets[hashval])
+    HeaderSetEntry *parent = PSC_HashTable_get(self->entries, key);
+    if (parent)
     {
-	HeaderSetEntry *parent = self->buckets[hashval];
 	while (parent->next) parent = parent->next;
 	parent->next = entry;
     }
-    else
-    {
-	self->buckets[hashval] = entry;
-    }
-    ++self->count;
+    else PSC_HashTable_set(self->entries, key, entry, entryDeleter);
     self->size += Header_size(header);
+    free(key);
 }
 
 int HeaderSet_remove(HeaderSet *self, const Header *header)
 {
-    char *key = lowerstr(Header_name(header));
-    uint8_t hashval = hash(key, HSHT_BITS);
+    char *key = PSC_lowerstr(Header_name(header));
     int rc = 0;
 
-    HeaderSetEntry *current = self->buckets[hashval];
+    HeaderSetEntry *entry = PSC_HashTable_get(self->entries, key);
     HeaderSetEntry *parent = 0;
-    while (current)
+    if (!entry) goto done;
+    while (entry)
     {
-	if (!strcmp(key, current->key) &&
-		!strcmp(Header_value(header), Header_value(current->header)))
+	HeaderSetEntry *next = entry->next;
+	if (!strcasecmp(Header_name(entry->header), key) &&
+		!strcmp(Header_value(entry->header), Header_value(header)))
 	{
-	    removeEntry(self, hashval, parent, current);
 	    rc = 1;
+	    self->size -= Header_size(entry->header);
+	    Header_destroy(entry->header);
+	    free(entry);
+	    if (parent) parent->next = next;
+	    else if (next)
+	    {
+		PSC_HashTable_set(self->entries, key, next, entryDeleter);
+	    }
+	    else PSC_HashTable_delete(self->entries, key);
 	    break;
 	}
-	parent = current;
-	current = current->next;
+	parent = entry;
+	entry = next;
     }
 
+done:
     free(key);
     return rc;
 }
 
-int HeaderSet_removeAll(HeaderSet *self, const char *headerName)
+size_t HeaderSet_removeAll(HeaderSet *self, const char *headerName)
 {
-    char *key = lowerstr(headerName);
-    uint8_t hashval = hash(key, HSHT_BITS);
-    int rc = 0;
-
-    HeaderSetEntry *current = self->buckets[hashval];
-    HeaderSetEntry *parent = 0;
-    while (current)
+    char *key = PSC_lowerstr(headerName);
+    HeaderSetEntry *old = PSC_HashTable_get(self->entries, key);
+    size_t removed = 0;
+    while (old)
     {
-	if (!strcmp(key, current->key))
-	{
-	    HeaderSetEntry *next = current->next;
-	    removeEntry(self, hashval, parent, current);
-	    current = next;
-	    ++rc;
-	}
-	else
-	{
-	    parent = current;
-	    current = current->next;
-	}
+	self->size -= Header_size(old->header);
+	++removed;
+	old = old->next;
     }
-
+    PSC_HashTable_delete(self->entries, key);
     free(key);
-    return rc;
+    return removed;
 }
 
 HeaderIterator *HeaderSet_all(const HeaderSet *self)
 {
     HeaderIterator *it = PSC_malloc(sizeof *it);
-    it->headerSet = self;
-    it->key = 0;
-    it->entry = 0;
-    it->hash = 0xff;
+    it->iter = PSC_HashTable_iterator(self->entries);
+    it->first = 0;
+    it->current = 0;
     return it;
 }
 
 HeaderIterator *HeaderSet_any(const HeaderSet *self, const char *headerName)
 {
     HeaderIterator *it = PSC_malloc(sizeof *it);
-    it->headerSet = self;
-    it->key = lowerstr(headerName);
-    it->entry = 0;
-    it->hash = hash(it->key, HSHT_BITS);
+    it->iter = 0;
+    char *key = PSC_lowerstr(headerName);
+    it->first = PSC_HashTable_get(self->entries, key);
+    free(key);
+    it->current = 0;
     return it;
 }
 
 const Header *HeaderSet_first(const HeaderSet *self, const char *headerName)
 {
-    char *key = lowerstr(headerName);
-    uint8_t hashval = hash(key, HSHT_BITS);
-
-    const Header *header = 0;
-    for (HeaderSetEntry *entry = self->buckets[hashval];
-	    entry; entry = entry->next)
-    {
-	if (!strcmp(key, entry->key))
-	{
-	    header = entry->header;
-	    break;
-	}
-    }
-
+    char *key = PSC_lowerstr(headerName);
+    HeaderSetEntry *entry = PSC_HashTable_get(self->entries, key);
     free(key);
-    return header;
+    return entry ? entry->header : 0;
 }
 
 const Header *HeaderSet_single(const HeaderSet *self, const char *headerName)
 {
-    char *key = lowerstr(headerName);
-    uint8_t hashval = hash(key, HSHT_BITS);
-
-    const Header *header = 0;
-    for (HeaderSetEntry *entry = self->buckets[hashval];
-	    entry; entry = entry->next)
-    {
-	if (!strcmp(key, entry->key))
-	{
-	    if (!header) header = entry->header;
-	    else
-	    {
-		header = 0;
-		break;
-	    }
-	}
-    }
-
+    char *key = PSC_lowerstr(headerName);
+    HeaderSetEntry *entry = PSC_HashTable_get(self->entries, key);
     free(key);
-    return header;
+    return entry && !entry->next ? entry->header : 0;
 }
 
-
-uint16_t HeaderSet_size(const HeaderSet *self)
+size_t HeaderSet_size(const HeaderSet *self)
 {
     return self->size;
 }
@@ -211,83 +179,63 @@ uint16_t HeaderSet_size(const HeaderSet *self)
 void HeaderSet_destroy(HeaderSet *self)
 {
     if (!self) return;
-    for (uint8_t hash = 0; hash < HSHT_SIZE; ++hash)
-    {
-	HeaderSetEntry *next = 0;
-	for (HeaderSetEntry *current = self->buckets[hash];
-		current; current = next)
-	{
-	    next = current->next;
-	    Header_destroy(current->header);
-	    free(current->key);
-	    free(current);
-	}
-    }
+    PSC_HashTable_destroy(self->entries);
     free(self);
 }
 
 int HeaderIterator_moveNext(HeaderIterator *self)
 {
-    if (self->entry)
+    if (self->current)
     {
-	while (self->entry->next)
+	if (self->current->next)
 	{
-	    self->entry = self->entry->next;
-	    if (!self->key) return 1;
-	    if (!strcmp(self->key, self->entry->key)) return 1;
+	    self->current = self->current->next;
+	    return 1;
 	}
-	if (self->key)
+	else if (self->iter)
 	{
-	    self->entry = 0;
-	    return 0;
-	}
-	while (self->hash < HSHT_SIZE-1)
-	{
-	    ++self->hash;
-	    if (self->headerSet->buckets[self->hash])
+	    if (PSC_HashTableIterator_moveNext(self->iter))
 	    {
-		self->entry = self->headerSet->buckets[self->hash];
+		self->current = PSC_HashTableIterator_current(self->iter);
 		return 1;
 	    }
+	    else
+	    {
+		self->current = 0;
+		return 0;
+	    }
 	}
-	self->hash = 0xff;
-	self->entry = 0;
-	return 0;
-    }
-
-    if (self->key)
-    {
-	self->entry = self->headerSet->buckets[self->hash];
-	if (!self->entry) return 0;
-	while (self->entry)
+	else
 	{
-	    if (!strcmp(self->key, self->entry->key)) return 1;
-	    self->entry = self->entry->next;
+	    self->current = 0;
+	    return 0;
 	}
-	return 0;
     }
-
-    do
+    else if (self->first)
     {
-	++self->hash;
-	self->entry = self->headerSet->buckets[self->hash];
-	if (self->entry) return 1;
-    } while (self->hash < HSHT_SIZE);
-
-    self->hash = 0xff;
-    return 0;
+	self->current = self->first;
+	return 1;
+    }
+    else if (self->iter)
+    {
+	if (PSC_HashTableIterator_moveNext(self->iter))
+	{
+	    self->current = PSC_HashTableIterator_current(self->iter);
+	    return 1;
+	}
+	else return 0;
+    } else return 0;
 }
 
 const Header *HeaderIterator_current(const HeaderIterator *self)
 {
-    if (self->entry) return self->entry->header;
-    return 0;
+    return self->current ? self->current->header : 0;
 }
 
 void HeaderIterator_destroy(HeaderIterator *self)
 {
     if (!self) return;
-    free(self->key);
+    PSC_HashTableIterator_destroy(self->iter);
     free(self);
 }
 

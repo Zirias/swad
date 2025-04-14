@@ -301,7 +301,7 @@ int HttpResponse_send(HttpResponse *self, PSC_Connection *conn)
 		    "no-cache, no-store, must-revalidate"));
     }
     size_t statuslen = strlen(statusStr(self->status));
-    uint16_t headersize = HeaderSet_size(self->headers);
+    size_t headersize = HeaderSet_size(self->headers);
     free(self->headerBuf);
     self->headerBuf = PSC_malloc(headersize + statuslen + 13);
     sprintf((char *)self->headerBuf, "%s %s\r\n",
