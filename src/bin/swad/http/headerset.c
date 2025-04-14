@@ -58,6 +58,7 @@ void HeaderSet_set(HeaderSet *self, Header *header)
     while (old)
     {
 	self->size -= Header_size(old->header);
+	old = old->next;
     }
     HeaderSetEntry *entry = PSC_malloc(sizeof *entry);
     entry->header = header;
