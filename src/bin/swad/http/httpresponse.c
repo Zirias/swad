@@ -68,7 +68,7 @@ static char *methodsStr(HttpMethod mask)
 	if (mask & (1 << b)) methods[i++] = (char *)methodStr(1 << b);
     }
     if (!i) return 0;
-    return joinstr(", ", methods);
+    return PSC_joinstr(", ", methods);
 }
 
 static const char *versionStr(HttpVersion version)
