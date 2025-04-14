@@ -1,6 +1,5 @@
 #include "httpcontext.h"
 
-#include "../util.h"
 #include "header.h"
 #include "headerset.h"
 #include "httprequest.h"
@@ -11,22 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CPHT_BITS 6
-#define CPHT_SIZE HT_SIZE(CPHT_BITS)
-
-typedef struct HttpCtxProp HttpCtxProp;
-
-struct HttpCtxProp
-{
-    HttpCtxProp *next;
-    const char *key;
-    void *obj;
-    ObjDeleter deleter;
-};
-
 struct HttpContext
 {
-    HttpCtxProp *buckets[CPHT_SIZE];
+    PSC_HashTable *props;
     void *owner;
     HttpRequest *request;
     HttpResponse *response;
@@ -38,12 +24,6 @@ struct HttpContext
     int pipelinePos;
     int reuse;
 };
-
-static HttpCtxProp *findProp(const HttpContext *self,
-	const char *key, uint8_t *hashval)
-    CMETHOD ATTR_NONNULL((2)) ATTR_ACCESS((write_only, 3));
-static HttpCtxProp *insertOrUpdate(HttpContext *self, const char *key)
-    CMETHOD ATTR_NONNULL((2)) ATTR_RETNONNULL;
 
 static void nameResolved(void *receiver, void *sender, void *args)
 {
@@ -135,55 +115,22 @@ void HttpContext_callNext(HttpContext *self)
     next(self);
 }
 
-static HttpCtxProp *findProp(const HttpContext *self,
-	const char *key, uint8_t *hashval)
-{
-    uint8_t h = hash(key, CPHT_BITS);
-    if (hashval) *hashval = h;
-    HttpCtxProp *prop = self->buckets[h];
-    while (prop)
-    {
-	if (!strcmp(prop->key, key)) break;
-	prop = prop->next;
-    }
-    return prop;
-}
-
-static HttpCtxProp *insertOrUpdate(HttpContext *self, const char *key)
-{
-    uint8_t hashval;
-    HttpCtxProp *prop = findProp(self, key, &hashval);
-    if (!prop)
-    {
-	prop = PSC_malloc(sizeof *prop);
-	prop->next = 0;
-	prop->key = key;
-	prop->obj = 0;
-	prop->deleter = 0;
-	HttpCtxProp *parent = self->buckets[hashval];
-	if (parent)
-	{
-	    while (parent->next) parent = parent->next;
-	    parent->next = prop;
-	}
-	else self->buckets[hashval] = prop;
-    }
-    if (prop->deleter) prop->deleter(prop->obj);
-    return prop;
-}
-
 void *HttpContext_get(const HttpContext *self, const char *key)
 {
-    HttpCtxProp *prop = findProp(self, key, 0);
-    return prop ? prop->obj : 0;
+    if (!self->props) return 0;
+    return PSC_HashTable_get(self->props, key);
 }
 
 void HttpContext_set(HttpContext *self, const char *key,
 	void *obj, ObjDeleter deleter)
 {
-    HttpCtxProp *prop = insertOrUpdate(self, key);
-    prop->obj = obj;
-    prop->deleter = deleter;
+    if (!self->props)
+    {
+	if (!obj) return;
+	self->props = PSC_HashTable_create(6);
+    }
+    if (obj) PSC_HashTable_set(self->props, key, obj, deleter);
+    else PSC_HashTable_delete(self->props, key);
 }
 
 void HttpContext_setResponse(HttpContext *self, HttpResponse *response)
@@ -226,17 +173,6 @@ void HttpContext_setResponse(HttpContext *self, HttpResponse *response)
 void HttpContext_destroy(HttpContext *self)
 {
     if (!self) return;
-    for (uint8_t h = 0; h < CPHT_SIZE; ++h)
-    {
-	HttpCtxProp *prop = self->buckets[h];
-	while (prop)
-	{
-	    HttpCtxProp *next = prop->next;
-	    if (prop->deleter) prop->deleter(prop->obj);
-	    free(prop);
-	    prop = next;
-	}
-    }
     if (self->conn)
     {
 	if (!self->remoteHost)
@@ -249,6 +185,7 @@ void HttpContext_destroy(HttpContext *self)
     }
     free(self->remoteHost);
     free(self->remoteAddr);
+    PSC_HashTable_destroy(self->props);
     free(self);
 }
 
