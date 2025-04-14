@@ -48,7 +48,6 @@ char *joinstr(const char *delim, char **strings)
     return joined;
 }
 
-#ifndef BUNDLED_POSER
 uint8_t hashstr(const char *key, uint8_t mask)
 {
     size_t h = 5381;
@@ -58,7 +57,6 @@ uint8_t hashstr(const char *key, uint8_t mask)
     }
     return h & mask;
 }
-#endif
 
 void appendchr(char **str, size_t *size, size_t *pos, size_t chunksz, char c)
 {

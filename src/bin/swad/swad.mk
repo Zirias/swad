@@ -6,7 +6,6 @@ GEN_CHELP_args=		-fcpp -o$1 $2
 swad_VERSION=		0.2
 swad_MODULES=		authenticator \
 			config \
-			base64 \
 			cred/pamchecker \
 			handler/login \
 			handler/root \
@@ -28,7 +27,6 @@ swad_MODULES=		authenticator \
 			middleware/pathparser \
 			middleware/session \
 			proxylist \
-			random \
 			ratelimit \
 			template \
 			tmpl \
@@ -61,7 +59,6 @@ swad_PRECFLAGS+=	-I./poser/include
 swad_LIBS+=		posercore $(posercore_LIBS)
 swad_LDFLAGS+=		$(posercore_LDFLAGS)
 swad_PKGDEPS+=		$(posercore_PKGDEPS)
-swad_DEFINES+=		-DBUNDLED_POSER
 else
 swad_PKGDEPS+=		posercore >= 1.2.3
 endif

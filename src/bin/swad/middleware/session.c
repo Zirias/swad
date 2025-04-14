@@ -8,7 +8,6 @@
 #include "../http/httpresponse.h"
 #include "../http/httpstatus.h"
 #include "../proxylist.h"
-#include "../random.h"
 #include "../ratelimit.h"
 #include "../util.h"
 #include "cookies.h"
@@ -125,7 +124,7 @@ static Session *createSession(time_t now)
     do
     {
 	free(id);
-	id = createRndStr(32);
+	id = PSC_Random_createStr(32, 0);
     } while (findSession(id, now, &h));
     Session *parent = buckets[h];
     while (parent && parent->next) parent = parent->next;

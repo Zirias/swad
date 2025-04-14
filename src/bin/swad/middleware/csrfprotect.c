@@ -3,11 +3,10 @@
 #include "../http/httpcontext.h"
 #include "../http/httpresponse.h"
 #include "../http/httpstatus.h"
-#include "../random.h"
 #include "formdata.h"
 #include "session.h"
 
-#include <poser/core/log.h>
+#include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -22,7 +21,7 @@ const char *CSRFProtect_token(HttpContext *context)
 {
     Session *session = Session_get(context);
     if (!session) return 0;
-    char *token = createRndStr(32);
+    char *token = PSC_Random_createStr(32, 0);
     Session_setProp(session, PROPNAME, token, free);
     return token;
 }
