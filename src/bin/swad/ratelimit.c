@@ -20,11 +20,12 @@ typedef struct Entry
 
 typedef struct Limit
 {
-    PSC_HashTable *entries;
+    PSC_Dictionary *entries;
     uint16_t seconds;
     uint16_t limit;
     uint16_t res;
     uint16_t ncounts;
+    uint16_t cleancount;
 } Limit;
 
 struct RateLimit
@@ -32,6 +33,7 @@ struct RateLimit
     size_t nlimits;
     pthread_mutex_t lock;
     int locked;
+    uint16_t cleanperiod;
     Limit limits[];
 };
 
@@ -51,45 +53,60 @@ RateLimit *RateLimit_create(const RateLimitOpts *opts)
     if (opts->locked) pthread_mutex_init(&self->lock, 0);
     self->locked = opts->locked;
     memcpy(self->limits, opts->limits, self->nlimits * sizeof *self->limits);
+    self->cleanperiod = self->nlimits > 20 ? 1000 : 50 * self->nlimits;
+    for (size_t i = 0; i < self->nlimits; ++i)
+    {
+	self->limits[i].cleancount = (i+1) *
+	    (self->cleanperiod / self->nlimits);
+    }
     return self;
 }
 
 struct expiredarg
 {
-    const char *id;
+    const void *id;
+    size_t idlen;
     uint16_t now;
     uint16_t ncounts;
 };
 
-static int expired(const char *key, void *obj, const void *arg)
+static int expired(const void *key, size_t keysz,  void *obj, const void *arg)
 {
     const struct expiredarg *ea = arg;
     Entry *e = obj;
 
-    if (strcmp(key, ea->id) && ea->now - e->last >= ea->ncounts) return 1;
+    if ((ea->idlen != keysz || memcmp(key, ea->id, keysz))
+	    && ea->now - e->last >= ea->ncounts) return 1;
     return 0;
 }
 
-static int checkLimit(Limit *self, struct timespec *ts, const char *id)
+static int checkLimit(Limit *self, struct timespec *ts, const char *id,
+	uint16_t cleanperiod)
 {
+    size_t idlen = strlen(id);
     uint16_t now = ts->tv_sec / self->res;
-    if (!self->entries) self->entries = PSC_HashTable_create(6);
+    if (!self->entries) self->entries = PSC_Dictionary_create(free);
     else
     {
-	struct expiredarg ea = {
-	    .id = id,
-	    .now = now,
-	    .ncounts = self->ncounts
-	};
-	PSC_HashTable_deleteAll(self->entries, expired, &ea);
+	if (!--self->cleancount)
+	{
+	    struct expiredarg ea = {
+		.id = id,
+		.idlen = idlen,
+		.now = now,
+		.ncounts = self->ncounts
+	    };
+	    PSC_Dictionary_removeAll(self->entries, expired, &ea);
+	    self->cleancount = cleanperiod;
+	}
     }
-    Entry *e = PSC_HashTable_get(self->entries, id);
+    Entry *e = PSC_Dictionary_get(self->entries, id, idlen);
     if (!e)
     {
 	e = PSC_malloc(sizeof *e + self->ncounts * sizeof *e->counts);
 	memset(e, 0, sizeof *e + self->ncounts * sizeof *e->counts);
 	e->last = now;
-	PSC_HashTable_set(self->entries, id, e, free);
+	PSC_Dictionary_set(self->entries, id, idlen, e, 0);
     }
     for (; e->last != now; ++e->last)
     {
@@ -114,7 +131,7 @@ int RateLimit_check(RateLimit *self, const char *id)
     if (self->locked) pthread_mutex_lock(&self->lock);
     for (size_t i = 0; i < self->nlimits; ++i)
     {
-	if (!checkLimit(self->limits + i, &ts, id)) ok = 0;
+	if (!checkLimit(self->limits + i, &ts, id, self->cleanperiod)) ok = 0;
     }
     if (self->locked) pthread_mutex_unlock(&self->lock);
     return ok;
@@ -125,7 +142,7 @@ void RateLimit_destroy(RateLimit *self)
     if (!self) return;
     for (size_t i = 0; i < self->nlimits; ++i)
     {
-	PSC_HashTable_destroy(self->limits[i].entries);
+	PSC_Dictionary_destroy(self->limits[i].entries);
     }
     if (self->locked) pthread_mutex_destroy(&self->lock);
     free(self);
