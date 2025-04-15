@@ -115,7 +115,7 @@ static void prestartup(void *receiver, void *sender, void *args)
 		    CfgServer_tlsCert(s), CfgServer_tlsKey(s));
 	}
 	HttpServerOpts_setProto(opts, CfgServer_proto(s));
-	if (!Config_resolveHosts()) HttpServerOpts_numericHosts(opts);
+	if (Config_resolveHosts()) HttpServerOpts_resolveHosts(opts);
 	HttpServerOpts_trustedProxies(opts, CfgServer_trustedProxies(s));
 	HttpServerOpts_trustedHeader(opts, CfgServer_trustedHeader(s));
 	HttpServerOpts_nat64Prefix(opts, CfgServer_nat64Prefix(s));

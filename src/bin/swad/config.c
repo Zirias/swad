@@ -479,7 +479,7 @@ static void readOption(char *lp)
 	    pidfile = cfg_pidfile;
 	}
     }
-    if (!strcmp(key, "resolveHosts"))
+    if (!strcmp(key, "resolve_hosts"))
     {
 	if (resolveHosts < 0 && boolArg(&resolveHosts, value) < 0) goto inval;
 	return;

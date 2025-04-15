@@ -27,7 +27,7 @@ void HttpServerOpts_bind(HttpServerOpts *self, const char *bindhost)
 void HttpServerOpts_enableTls(HttpServerOpts *self,
 	const char *certfile, const char *keyfile)
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
-void HttpServerOpts_numericHosts(HttpServerOpts *self) CMETHOD;
+void HttpServerOpts_resolveHosts(HttpServerOpts *self) CMETHOD;
 void HttpServerOpts_setProto(HttpServerOpts *self, PSC_Proto proto) CMETHOD;
 void HttpServerOpts_trustedProxies(HttpServerOpts *self, int num) CMETHOD;
 void HttpServerOpts_trustedHeader(HttpServerOpts *self, ProxyHeader trusted)

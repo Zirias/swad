@@ -30,16 +30,15 @@ struct RemoteEntry
 	PSC_IpAddr *addr;
 	const PSC_IpAddr *caddr;
     };
-    char *host;
     int constaddr;
 };
 
 static RemoteEntry *createRemoteEntry(const char *str)
 {
     PSC_IpAddr *ipAddr = PSC_IpAddr_create(str);
+    if (!ipAddr) return 0;
     RemoteEntry *self = PSC_malloc(sizeof *self);
     self->addr = ipAddr;
-    self->host = ipAddr ? 0 : PSC_copystr(str);
     self->constaddr = 0;
     return self;
 }
@@ -48,7 +47,6 @@ static RemoteEntry *createEntryFromAddr(const PSC_IpAddr *ipAddr)
 {
     RemoteEntry *self = PSC_malloc(sizeof *self);
     self->caddr = ipAddr;
-    self->host = 0;
     self->constaddr = 1;
     return self;
 }
@@ -58,7 +56,6 @@ static void deleteRemoteEntry(void *obj)
     if (!obj) return;
     RemoteEntry *self = obj;
     if (!self->constaddr) PSC_IpAddr_destroy(self->addr);
-    free(self->host);
     free(self);
 }
 
@@ -318,9 +315,10 @@ static PSC_List *proxyAddr(HeaderIterator *i, int rfc7239)
 	PSC_List *proxyList = PSC_List_create();
 	while (addrCount)
 	{
-	    PSC_List_append(proxyList, createRemoteEntry(addr[addrCount]),
-		    deleteRemoteEntry);
-	    free(addr[--addrCount]);
+	    RemoteEntry *entry = createRemoteEntry(addr[--addrCount]);
+	    if (!entry) entry = createRemoteEntry("::/0");
+	    PSC_List_append(proxyList, entry, deleteRemoteEntry);
+	    free(addr[addrCount]);
 	}
 	return proxyList;
     }
@@ -392,9 +390,3 @@ const PSC_IpAddr *RemoteEntry_addr(const RemoteEntry *self)
 {
     return self->constaddr ? self->caddr : self->addr;
 }
-
-const char *RemoteEntry_host(const RemoteEntry *self)
-{
-    return self->host;
-}
-

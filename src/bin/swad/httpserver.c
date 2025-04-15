@@ -21,6 +21,8 @@
 #define CONNTIMEOUT 10
 #define REQUESTTIMEOUT 30
 
+#define CTXLOGKEY "_LOGRECORD"
+
 typedef struct HttpRoute
 {
     const char *prefix;
@@ -42,6 +44,7 @@ struct HttpServer
     size_t middlewarescapa;
     ProxyHeader trustedHeader;
     int trustedProxies;
+    int resolveHosts;
 };
 
 struct HttpServerOpts
@@ -50,6 +53,7 @@ struct HttpServerOpts
     const PSC_IpAddr *nat64Prefix;
     ProxyHeader trustedHeader;
     int trustedProxies;
+    int resolveHosts;
 };
 
 typedef struct ConnectionContext
@@ -57,6 +61,28 @@ typedef struct ConnectionContext
     PSC_Timer *timer;
     PSC_ThreadJob *job;
 } ConnectionContext;
+
+typedef enum LogRecordState
+{
+    LRS_NONE	    = 0,
+
+    LRS_RESPONSE    = (1 << 0),
+    LRS_REMOTES	    = (1 << 1),
+
+    LRS_COMPLETE    = LRS_RESPONSE|LRS_REMOTES
+} LogRecordState;
+
+typedef struct LogRecord
+{
+    char raddr[1024];
+    PSC_Resolver *resolver;
+    char *method;
+    char *path;
+    unsigned version;
+    HttpStatus status;
+    PSC_LogLevel level;
+    LogRecordState state;
+} LogRecord;
 
 static ConnectionContext *createContext(PSC_Connection *conn);
 static void destroyContext(void *ctx);
@@ -66,14 +92,150 @@ static void connClosed(void *receiver, void *sender, void *args);
 static HttpHandler getMiddlewareAt(void *owner, size_t pos) ATTR_PURE;
 static void httpResponseSentSingle(void *receiver, void *sender, void *args);
 static void httpResponseSentReuse(void *receiver, void *sender, void *args);
-static void logRequest(HttpServer *self, HttpContext *context)
-    CMETHOD ATTR_NONNULL((1));
 static void pipelineJob(void *arg);
 static void pipelineJobDone(void *receiver, void *sender, void *args);
 static void pipelineCanceledJobDone(void *receiver, void *sender, void *args);
 static void pipelineJobCanceled(void *receiver, void *sender, void *args);
 static void requestReceived(void *receiver, void *sender, void *args);
 static void tcpClientConnected(void *receiver, void *sender, void *args);
+
+static void logAndDelete(LogRecord *record)
+{
+    PSC_Log_fmt(record->level, "http: %u - %s %s HTTP/1.%u - %s",
+	    record->status, record->method, record->path, record->version,
+	    record->raddr);
+    free(record->path);
+    free(record->method);
+    free(record);
+}
+
+static void logResponse(HttpServer *self, HttpContext *context)
+{
+    LogRecord *record = HttpContext_get(context, CTXLOGKEY);
+    record->status = HttpResponse_status(HttpContext_response(context));
+    record->level = PSC_L_INFO;
+    if (self->loglevel) record->level = self->loglevel(
+	    HttpContext_request(context), record->status);
+    record->state |= LRS_RESPONSE;
+
+    if (record->state == LRS_COMPLETE) logAndDelete(record);
+}
+
+static void resolveDone(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    LogRecord *record = receiver;
+    size_t raddr_pos = 0;
+    PSC_ListIterator *i = PSC_List_iterator(
+	    PSC_Resolver_entries(record->resolver));
+    while (PSC_ListIterator_moveNext(i))
+    {
+	const PSC_ResolverEntry *entry = PSC_ListIterator_current(i);
+	const PSC_IpAddr *addr = PSC_ResolverEntry_addr(entry);
+	const char *name = PSC_ResolverEntry_name(entry);
+
+	int rc = -1;
+	if (name)
+	{
+	    rc = snprintf(record->raddr + raddr_pos,
+		    sizeof record->raddr - raddr_pos, raddr_pos ?
+		    ", %s [%s]" : "%s [%s]", name, PSC_IpAddr_string(addr));
+	}
+	else
+	{
+	    rc = snprintf(record->raddr + raddr_pos,
+		    sizeof record->raddr - raddr_pos, raddr_pos ?
+		    ", %s" : "%s", PSC_IpAddr_string(addr));
+	}
+	if (rc < 0) break;
+	raddr_pos += rc;
+	if (raddr_pos >= sizeof record->raddr - 1)
+	{
+	    raddr_pos = sizeof record->raddr - 1;
+	    break;
+	}
+    }
+    PSC_ListIterator_destroy(i);
+    PSC_Resolver_destroy(record->resolver);
+    record->resolver = 0;
+    record->raddr[raddr_pos] = 0;
+    record->state |= LRS_REMOTES;
+
+    if (record->state == LRS_COMPLETE) logAndDelete(record);
+}
+
+static void createLogRecord(HttpServer *self, HttpContext *context)
+{
+    LogRecord *record = PSC_malloc(sizeof *record);
+    memset(record, 0, sizeof *record);
+    HttpRequest *request = HttpContext_request(context);
+    record->method = PSC_copystr(HttpRequest_rawMethod(request));
+    record->path = PSC_copystr(HttpRequest_path(request));
+    record->version = HttpRequest_version(request);
+
+    size_t raddr_pos = 0;
+    const PSC_List *remotes = ProxyList_get(context);
+    size_t nremotes = PSC_List_size(remotes);
+    if (self->resolveHosts)
+    {
+	const PSC_IpAddr *prefixes[] = { self->nat64Prefix, 0 };
+	record->resolver = PSC_Resolver_create();
+	for (size_t i = ProxyList_firstTrusted(context); i < nremotes; ++i)
+	{
+	    const PSC_IpAddr *addr = RemoteEntry_addr(PSC_List_at(remotes, i));
+	    PSC_IpAddr *ipv4 = 0;
+	    if (self->nat64Prefix && (ipv4 = PSC_IpAddr_tov4(addr, prefixes)))
+	    {
+		PSC_Resolver_addAddr(record->resolver, ipv4);
+		PSC_IpAddr_destroy(ipv4);
+	    }
+	    else PSC_Resolver_addAddr(record->resolver, addr);
+	}
+	PSC_Event_register(PSC_Resolver_done(record->resolver), record,
+		resolveDone, 0);
+	if (PSC_Resolver_resolve(record->resolver, 1) < 0)
+	{
+	    PSC_Resolver_destroy(record->resolver);
+	    record->resolver = 0;
+	}
+    }
+    if (!record->resolver)
+    {
+	for (size_t i = ProxyList_firstTrusted(context); i < nremotes; ++i)
+	{
+	    const RemoteEntry *remote = PSC_List_at(remotes, i);
+	    const PSC_IpAddr *addr = RemoteEntry_addr(remote);
+	    const char *addrStr = "<Unknown>";
+	    if (self->nat64Prefix)
+	    {
+		const PSC_IpAddr *prefixes[] = { self->nat64Prefix, 0 };
+		PSC_IpAddr *ipv4 = PSC_IpAddr_tov4(addr, prefixes);
+		if (ipv4)
+		{
+		    addrStr = PSC_IpAddr_string(ipv4);
+		    PSC_IpAddr_destroy(ipv4);
+		}
+		else addrStr = PSC_IpAddr_string(addr);
+	    }
+	    int rc = snprintf(record->raddr + raddr_pos,
+		    sizeof record->raddr - raddr_pos,
+		    i < nremotes - 1 ? "%s, " : "%s", addrStr);
+	    if (rc < 0) break;
+	    raddr_pos += rc;
+	    if (raddr_pos >= sizeof record->raddr - 1)
+	    {
+		raddr_pos = sizeof record->raddr - 1;
+		break;
+	    }
+	}
+	record->raddr[raddr_pos] = 0;
+	record->state = LRS_REMOTES;
+    }
+
+    HttpContext_set(context, CTXLOGKEY, record, 0);
+}
 
 static ConnectionContext *createContext(PSC_Connection *conn)
 {
@@ -182,50 +344,6 @@ static HttpHandler getMiddlewareAt(void *owner, size_t pos)
     return self->middlewares[pos];
 }
 
-static void logRequest(HttpServer *self, HttpContext *context)
-{
-    char raddr[1024];
-    size_t raddr_pos = 0;
-    const PSC_List *remotes = ProxyList_get(context);
-    size_t nremotes = PSC_List_size(remotes);
-    for (size_t i = ProxyList_firstTrusted(context); i < nremotes; ++i)
-    {
-	const RemoteEntry *remote = PSC_List_at(remotes, i);
-	const PSC_IpAddr *addr = RemoteEntry_addr(remote);
-	const char *addrStr = "<Unknown>";
-	if (addr && self->nat64Prefix)
-	{
-	    const PSC_IpAddr *prefixes[] = { self->nat64Prefix, 0 };
-	    PSC_IpAddr *ipv4 = PSC_IpAddr_tov4(addr, prefixes);
-	    if (ipv4)
-	    {
-		addrStr = PSC_IpAddr_string(ipv4);
-		PSC_IpAddr_destroy(ipv4);
-	    }
-	    else addrStr = PSC_IpAddr_string(addr);
-	}
-	int rc = snprintf(raddr + raddr_pos, sizeof raddr - raddr_pos,
-		i < nremotes - 1 ? "%s, " : "%s", addrStr);
-	if (rc < 0) break;
-	raddr_pos += rc;
-	if (raddr_pos >= sizeof raddr - 1)
-	{
-	    raddr_pos = sizeof raddr - 1;
-	    break;
-	}
-    }
-    raddr[raddr_pos] = 0;
-
-    HttpRequest *request = HttpContext_request(context);
-    HttpStatus status = HttpResponse_status(HttpContext_response(context));
-    PSC_LogLevel level = PSC_L_INFO;
-    if (self->loglevel) level = self->loglevel(request, status);
-
-    PSC_Log_fmt(level, "http: %u - %s %s HTTP/1.%u - %s", status,
-	    HttpRequest_rawMethod(request), HttpRequest_path(request),
-	    HttpRequest_version(request), raddr);
-}
-
 static void pipelineJobDone(void *receiver, void *sender, void *args)
 {
     HttpServer *self = receiver;
@@ -253,7 +371,7 @@ static void pipelineJobDone(void *receiver, void *sender, void *args)
 	response = HttpResponse_createError(HTTP_INTERNALSERVERERROR, 0);
     }
 
-    logRequest(self, context);
+    logResponse(self, context);
 
     HeaderSet *headers = HttpResponse_headers(response);
     HttpStatus status = HttpResponse_status(response);
@@ -354,6 +472,7 @@ static void requestReceived(void *receiver, void *sender, void *args)
 done:
     context = HttpContext_create(req, hdl, self, getMiddlewareAt, conn);
     ProxyList_setTrusted(context, self->trustedHeader, self->trustedProxies);
+    createLogRecord(self, context);
     if (!response)
     {
 	ConnectionContext *ctx = PSC_Connection_data(conn);
@@ -403,6 +522,7 @@ HttpServerOpts *HttpServerOpts_create(int port)
     self->nat64Prefix = 0;
     self->trustedHeader = PH_XFWD | PH_RFC;
     self->trustedProxies = 0;
+    self->resolveHosts = 0;
     return self;
 }
 
@@ -417,9 +537,9 @@ void HttpServerOpts_enableTls(HttpServerOpts *self,
     PSC_TcpServerOpts_enableTls(self->serverOpts, certfile, keyfile);
 }
 
-void HttpServerOpts_numericHosts(HttpServerOpts *self)
+void HttpServerOpts_resolveHosts(HttpServerOpts *self)
 {
-    PSC_TcpServerOpts_numericHosts(self->serverOpts);
+    self->resolveHosts = 1;
 }
 
 void HttpServerOpts_setProto(HttpServerOpts *self, PSC_Proto proto)
@@ -467,6 +587,7 @@ HttpServer *HttpServer_create(const HttpServerOpts *opts)
     self->middlewarescapa = MIDDLEWARESCHUNK;
     self->trustedHeader = opts->trustedHeader;
     self->trustedProxies = opts->trustedProxies;
+    self->resolveHosts = opts->resolveHosts;
 
     PSC_Event_register(PSC_Server_clientConnected(server), self,
 	    tcpClientConnected, 0);

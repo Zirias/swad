@@ -17,6 +17,5 @@ void ProxyList_setTrusted(HttpContext *context, ProxyHeader header,
 size_t ProxyList_firstTrusted(HttpContext *context) CMETHOD;
 
 const PSC_IpAddr *RemoteEntry_addr(const RemoteEntry *self) CMETHOD;
-const char *RemoteEntry_host(const RemoteEntry *self) CMETHOD;
 
 #endif
