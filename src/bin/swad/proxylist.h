@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 C_CLASS_DECL(HttpContext);
+C_CLASS_DECL(PSC_IpAddr);
 C_CLASS_DECL(PSC_List);
 C_CLASS_DECL(RemoteEntry);
 
@@ -15,7 +16,7 @@ void ProxyList_setTrusted(HttpContext *context, ProxyHeader header,
 	size_t ntrusted) CMETHOD;
 size_t ProxyList_firstTrusted(HttpContext *context) CMETHOD;
 
-const char *RemoteEntry_addr(const RemoteEntry *self) CMETHOD ATTR_RETNONNULL;
+const PSC_IpAddr *RemoteEntry_addr(const RemoteEntry *self) CMETHOD;
 const char *RemoteEntry_host(const RemoteEntry *self) CMETHOD;
 
 #endif

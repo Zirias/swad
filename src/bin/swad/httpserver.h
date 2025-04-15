@@ -13,7 +13,7 @@ C_CLASS_DECL(HttpRequest);
 C_CLASS_DECL(HttpServer);
 C_CLASS_DECL(HttpServerOpts);
 C_CLASS_DECL(HttpContext);
-C_CLASS_DECL(IpAddr);
+C_CLASS_DECL(PSC_IpAddr);
 
 typedef void (*HttpHandler)(HttpContext *context) ATTR_NONNULL((1));
 typedef HttpMethod (*HttpMethodCheck)(const char *rawPath) ATTR_NONNULL((1));
@@ -32,7 +32,7 @@ void HttpServerOpts_setProto(HttpServerOpts *self, PSC_Proto proto) CMETHOD;
 void HttpServerOpts_trustedProxies(HttpServerOpts *self, int num) CMETHOD;
 void HttpServerOpts_trustedHeader(HttpServerOpts *self, ProxyHeader trusted)
     CMETHOD;
-void HttpServerOpts_nat64Prefix(HttpServerOpts *self, const IpAddr *prefix)
+void HttpServerOpts_nat64Prefix(HttpServerOpts *self, const PSC_IpAddr *prefix)
     CMETHOD ATTR_NONNULL((2));
 void HttpServerOpts_destroy(HttpServerOpts *self);
 

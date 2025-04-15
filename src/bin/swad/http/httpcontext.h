@@ -8,6 +8,7 @@ C_CLASS_DECL(HttpContext);
 C_CLASS_DECL(HttpRequest);
 C_CLASS_DECL(HttpResponse);
 C_CLASS_DECL(PSC_Connection);
+C_CLASS_DECL(PSC_IpAddr);
 
 typedef void (*HttpHandler)(HttpContext *context) ATTR_NONNULL((1));
 typedef void (*ObjDeleter)(void *obj);
@@ -21,9 +22,10 @@ HttpRequest *HttpContext_request(HttpContext *self)
     CMETHOD ATTR_RETNONNULL ATTR_PURE;
 HttpResponse *HttpContext_response(HttpContext *self) CMETHOD ATTR_PURE;
 PSC_Connection *HttpContext_connection(HttpContext *self) CMETHOD;
+const PSC_IpAddr *HttpContext_remoteIpAddr(const HttpContext *self)
+    CMETHOD ATTR_PURE;
 const char *HttpContext_remoteAddr(const HttpContext *self)
-    CMETHOD ATTR_RETNONNULL ATTR_PURE;
-const char *HttpContext_remoteHost(const HttpContext *self) CMETHOD;
+    CMETHOD ATTR_PURE;
 int HttpContext_reuseConnection(const HttpContext *self) CMETHOD ATTR_PURE;
 void HttpContext_callNext(HttpContext *self) CMETHOD;
 void *HttpContext_get(const HttpContext *self, const char *key)

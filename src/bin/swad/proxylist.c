@@ -25,15 +25,31 @@ typedef struct TrustConfig
 
 struct RemoteEntry
 {
-    char *addr;
+    union
+    {
+	PSC_IpAddr *addr;
+	const PSC_IpAddr *caddr;
+    };
     char *host;
+    int constaddr;
 };
 
-static RemoteEntry *createRemoteEntry(char *addr, char *host)
+static RemoteEntry *createRemoteEntry(const char *str)
+{
+    PSC_IpAddr *ipAddr = PSC_IpAddr_create(str);
+    RemoteEntry *self = PSC_malloc(sizeof *self);
+    self->addr = ipAddr;
+    self->host = ipAddr ? 0 : PSC_copystr(str);
+    self->constaddr = 0;
+    return self;
+}
+
+static RemoteEntry *createEntryFromAddr(const PSC_IpAddr *ipAddr)
 {
     RemoteEntry *self = PSC_malloc(sizeof *self);
-    self->addr = addr;
-    self->host = host;
+    self->caddr = ipAddr;
+    self->host = 0;
+    self->constaddr = 1;
     return self;
 }
 
@@ -41,8 +57,8 @@ static void deleteRemoteEntry(void *obj)
 {
     if (!obj) return;
     RemoteEntry *self = obj;
+    if (!self->constaddr) PSC_IpAddr_destroy(self->addr);
     free(self->host);
-    free(self->addr);
     free(self);
 }
 
@@ -302,8 +318,9 @@ static PSC_List *proxyAddr(HeaderIterator *i, int rfc7239)
 	PSC_List *proxyList = PSC_List_create();
 	while (addrCount)
 	{
-	    PSC_List_append(proxyList, createRemoteEntry(addr[--addrCount], 0),
+	    PSC_List_append(proxyList, createRemoteEntry(addr[addrCount]),
 		    deleteRemoteEntry);
+	    free(addr[--addrCount]);
 	}
 	return proxyList;
     }
@@ -344,10 +361,11 @@ const PSC_List *ProxyList_get(HttpContext *context)
 	HeaderIterator_destroy(i);
     }
     if (!proxyList) proxyList = PSC_List_create();
-    PSC_List_append(proxyList, createRemoteEntry(
-		PSC_copystr(HttpContext_remoteAddr(context)),
-		PSC_copystr(HttpContext_remoteHost(context))),
-	    deleteRemoteEntry);
+    RemoteEntry *lastEntry = 0;
+    const PSC_IpAddr *lastAddr = HttpContext_remoteIpAddr(context);
+    if (lastAddr) lastEntry = createEntryFromAddr(lastAddr);
+    else lastEntry = createRemoteEntry(HttpContext_remoteAddr(context));
+    PSC_List_append(proxyList, lastEntry, deleteRemoteEntry);
     HttpContext_set(context, CTXKEY, proxyList, deleteProxyList);
     return proxyList;
 }
@@ -370,9 +388,9 @@ size_t ProxyList_firstTrusted(HttpContext *context)
     return nremotes > ntrusted + 1 ? nremotes - ntrusted - 1 : 0;
 }
 
-const char *RemoteEntry_addr(const RemoteEntry *self)
+const PSC_IpAddr *RemoteEntry_addr(const RemoteEntry *self)
 {
-    return self->addr;
+    return self->constaddr ? self->caddr : self->addr;
 }
 
 const char *RemoteEntry_host(const RemoteEntry *self)

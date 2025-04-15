@@ -181,7 +181,8 @@ void MW_Session(HttpContext *context)
     {
 	const RemoteEntry *r = PSC_List_at(
 		ProxyList_get(context), ProxyList_firstTrusted(context));
-	const char *id = RemoteEntry_addr(r);
+	const PSC_IpAddr *addr = RemoteEntry_addr(r);
+	const char *id = addr ? PSC_IpAddr_string(addr) : RemoteEntry_host(r);
 	if (!RateLimit_check(createLimit, id))
 	{
 	    HttpContext_setResponse(context,

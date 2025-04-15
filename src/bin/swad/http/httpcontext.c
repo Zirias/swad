@@ -17,23 +17,13 @@ struct HttpContext
     HttpRequest *request;
     HttpResponse *response;
     PSC_Connection *conn;
+    PSC_IpAddr *remoteIpAddr;
     char *remoteAddr;
-    char *remoteHost;
     MiddlewareLocator locator;
     HttpHandler handler;
     int pipelinePos;
     int reuse;
 };
-
-static void nameResolved(void *receiver, void *sender, void *args)
-{
-    (void)args;
-
-    HttpContext *self = receiver;
-    PSC_Connection *conn = sender;
-
-    self->remoteHost = PSC_copystr(PSC_Connection_remoteHost(conn));
-}
 
 static void connectionClosed(void *receiver, void *sender, void *args)
 {
@@ -56,17 +46,9 @@ HttpContext *HttpContext_create(HttpRequest *request, HttpHandler handler,
     self->handler = handler;
     if (conn)
     {
-	self->remoteAddr = PSC_copystr(PSC_Connection_remoteAddr(conn));
-	const char *remoteHost = PSC_Connection_remoteHost(conn);
-	if (remoteHost)
-	{
-	    self->remoteHost = PSC_copystr(remoteHost);
-	}
-	else
-	{
-	    PSC_Event_register(PSC_Connection_nameResolved(conn), self,
-		    nameResolved, 0);
-	}
+	const PSC_IpAddr *remoteIpAddr = PSC_Connection_remoteIpAddr(conn);
+	if (remoteIpAddr) self->remoteIpAddr = PSC_IpAddr_clone(remoteIpAddr);
+	else self->remoteAddr = PSC_copystr(PSC_Connection_remoteAddr(conn));
 	PSC_Event_register(PSC_Connection_closed(conn), self,
 		connectionClosed, 0);
     }
@@ -93,14 +75,15 @@ PSC_Connection *HttpContext_connection(HttpContext *self)
     return self->conn;
 }
 
-const char *HttpContext_remoteAddr(const HttpContext *self)
+const PSC_IpAddr *HttpContext_remoteIpAddr(const HttpContext *self)
 {
-    return self->remoteAddr;
+    return self->remoteIpAddr;
 }
 
-const char *HttpContext_remoteHost(const HttpContext *self)
+const char *HttpContext_remoteAddr(const HttpContext *self)
 {
-    return self->remoteHost;
+    if (self->remoteIpAddr) return PSC_IpAddr_string(self->remoteIpAddr);
+    return self->remoteAddr;
 }
 
 int HttpContext_reuseConnection(const HttpContext *self)
@@ -175,16 +158,11 @@ void HttpContext_destroy(HttpContext *self)
     if (!self) return;
     if (self->conn)
     {
-	if (!self->remoteHost)
-	{
-	    PSC_Event_unregister(PSC_Connection_nameResolved(self->conn),
-		    self, nameResolved, 0);
-	}
 	PSC_Event_unregister(PSC_Connection_closed(self->conn), self,
 		connectionClosed, 0);
     }
-    free(self->remoteHost);
     free(self->remoteAddr);
+    PSC_IpAddr_destroy(self->remoteIpAddr);
     PSC_HashTable_destroy(self->props);
     free(self);
 }

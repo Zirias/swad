@@ -11,7 +11,7 @@
 C_CLASS_DECL(CfgChecker);
 C_CLASS_DECL(CfgRealm);
 C_CLASS_DECL(CfgServer);
-C_CLASS_DECL(IpAddr);
+C_CLASS_DECL(PSC_IpAddr);
 
 typedef enum CheckerClass
 {
@@ -43,7 +43,7 @@ const char *CfgServer_tlsCert(const CfgServer *self) CMETHOD;
 const char *CfgServer_tlsKey(const CfgServer *self) CMETHOD;
 int CfgServer_trustedProxies(const CfgServer *self) CMETHOD;
 ProxyHeader CfgServer_trustedHeader(const CfgServer *self) CMETHOD;
-const IpAddr *CfgServer_nat64Prefix(const CfgServer *self)
+const PSC_IpAddr *CfgServer_nat64Prefix(const CfgServer *self)
     CMETHOD ATTR_RETNONNULL;
 
 long Config_uid(void);

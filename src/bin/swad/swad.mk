@@ -17,7 +17,6 @@ swad_MODULES=		authenticator \
 			http/httpresponse \
 			http/httpstatus \
 			httpserver \
-			ipaddr \
 			main \
 			mediatype \
 			middleware/compress \
