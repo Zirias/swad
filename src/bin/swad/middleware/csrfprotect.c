@@ -21,7 +21,8 @@ const char *CSRFProtect_token(HttpContext *context)
 {
     Session *session = Session_get(context);
     if (!session) return 0;
-    char *token = PSC_Random_createStr(32, 0);
+    char *token = PSC_Random_createStr(32, PSC_RF_SECURE);
+    if (!token) return 0;
     Session_setProp(session, PROPNAME, token, free);
     return token;
 }

@@ -126,6 +126,14 @@ static void showForm(HttpContext *context, Session *session,
     }
     Authenticator_destroy(auth);
 
+    const char *csrfToken = CSRFProtect_token(context);
+    if (!csrfToken)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "Cannot obtain random data for CSRF "
+		"protection token!");
+	return;
+    }
+
     Template *tmpl = 0;
     if (user)
     {
@@ -145,8 +153,7 @@ static void showForm(HttpContext *context, Session *session,
 	if (lu) Template_setStaticVar(tmpl, "USER", lu, TF_HTML);
     }
     Template_setStaticVar(tmpl, "CSRFNAME", CSRFProtect_name(), TF_NONE);
-    Template_setStaticVar(tmpl, "CSRFTOKEN",
-	    CSRFProtect_token(context), TF_NONE);
+    Template_setStaticVar(tmpl, "CSRFTOKEN", csrfToken, TF_NONE);
     Template_setStaticVar(tmpl, "REALM", realm, TF_HTML);
     Template_setStaticVar(tmpl, "SELF", path, TF_NONE);
     HttpResponse *response = HttpResponse_create(HTTP_OK, MT_HTML);

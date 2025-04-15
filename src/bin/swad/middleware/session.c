@@ -72,7 +72,8 @@ static Session *createSession(time_t now, char *id)
 {
     do
     {
-	PSC_Random_string(id, SID_LEN+1, 0);
+	size_t sz = PSC_Random_string(id, SID_LEN+1, PSC_RF_SECURE);
+	if (sz < SID_LEN+1) return 0;
     } while (findSession(id, now));
     Session *self = PSC_malloc(sizeof *self);
     self->props = PSC_Dictionary_create(0);
@@ -190,6 +191,12 @@ void MW_Session(HttpContext *context)
 	}
 	char newsid[SID_LEN+1];
 	self = createSession(now, newsid);
+	if (!self)
+	{
+	    PSC_Log_msg(PSC_L_ERROR,
+		    "Cannot obtain random data for new session id!");
+	    goto done;
+	}
 	Cookies_setCookie(cookies, COOKIENAME, newsid);
     }
     HttpContext_set(context, PROPNAME, self, 0);
