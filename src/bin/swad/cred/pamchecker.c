@@ -32,7 +32,6 @@ static PSC_Connection *pamStdout;
 static PSC_AsyncTask *currentTask;
 static unsigned refcnt;
 
-
 static void pamStdoutReceived(void *receiver, void *sender, void *args)
 {
     (void)receiver;
@@ -68,13 +67,16 @@ static void pamHelperDone(void *receiver, void *sender, void *args)
 
     PSC_Process *process = sender;
     pthread_mutex_lock(&pamLock);
-    if (process == pamProcess)
+    if (process != pamProcess)
     {
-	pamStdin = 0;
-	if (pamStdout) PSC_Connection_close(pamStdout, 0);
-	pamStdout = 0;
-	pamProcess = 0;
+	pthread_mutex_unlock(&pamLock);
+	return;
     }
+
+    pamStdin = 0;
+    if (pamStdout) PSC_Connection_close(pamStdout, 0);
+    pamStdout = 0;
+    pamProcess = 0;
     pthread_mutex_unlock(&pamLock);
 
     PSC_EAProcessDone *ea = args;
@@ -86,9 +88,11 @@ static void pamHelperDone(void *receiver, void *sender, void *args)
 	int status = PSC_EAProcessDone_status(ea);
 	if (status == PSC_ERR_EXEC) PSC_Log_msg(PSC_L_ERROR, "pamchecker: "
 		"Cannot launch pam helper " LIBEXECDIR "/swad_pam");
-	else if (status) PSC_Log_fmt(PSC_L_ERROR, "pamchecker: Child process "
-		"exited with status %d", status);
+	else PSC_Log_fmt(status ? PSC_L_ERROR : PSC_L_DEBUG, "pamchecker: "
+		"Child process exited with status %d", status);
     }
+
+    if (!refcnt) PSC_Service_shutdownUnlock();
 }
 
 static void setPamStream(void *obj,
@@ -99,7 +103,7 @@ static void setPamStream(void *obj,
     if (stream == PSC_ST_STDIN)
     {
 	pamStdin = conn;
-	if (pamStdout) pthread_mutex_unlock(&pamLock);
+	if (pamStdout) goto startupComplete;
     }
     else if (stream == PSC_ST_STDOUT)
     {
@@ -107,8 +111,15 @@ static void setPamStream(void *obj,
 	PSC_Connection_receiveLine(pamStdout);
 	PSC_Event_register(PSC_Connection_dataReceived(pamStdout), 0,
 		pamStdoutReceived, 0);
-	if (pamStdin) pthread_mutex_unlock(&pamLock);
+	if (pamStdin) goto startupComplete;
     }
+    return;
+
+startupComplete:
+    pthread_mutex_unlock(&pamLock);
+    PSC_Log_msg(PSC_L_DEBUG, "pamchecker: Launched pam helper "
+	    LIBEXECDIR "/swad_pam");
+
 }
 
 static void createProcess(void)
@@ -139,7 +150,11 @@ static void destroyChecker(void *obj)
     free(self->service);
     free(self);
     pthread_mutex_lock(&pamLock);
-    if (pamProcess && !--refcnt) PSC_Process_stop(pamProcess, 0);
+    if (pamProcess && !--refcnt)
+    {
+	PSC_Connection_close(pamStdin, 0);
+	PSC_Service_shutdownLock();
+    }
     pthread_mutex_unlock(&pamLock);
 }
 
