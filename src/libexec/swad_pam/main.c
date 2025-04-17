@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <security/pam_appl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,6 +65,16 @@ int main(int argc, char **argv)
 	if (fd < 0 ||
 		dup2(fd, STDERR_FILENO) != STDERR_FILENO) return EXIT_FAILURE;
 	close(fd);
+    }
+
+    int ignoreSigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGABRT, SIGPIPE, SIGALRM,
+	SIGTERM, SIGTSTP, SIGTTIN, SIGTTOU, SIGUSR1, SIGUSR2 };
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = SIG_IGN;
+    for (unsigned i = 0; i < sizeof ignoreSigs / sizeof *ignoreSigs; ++i)
+    {
+	sigaction(ignoreSigs[i], &sa, 0);
     }
 
     errno = 0;
