@@ -21,8 +21,8 @@ typedef struct PamChecker
 typedef struct PamLoginRequest
 {
     int ok;
+    const char *pw;
     char qualifiedUser[256];
-    char pw[256];
 } PamLoginRequest;
 
 static pthread_mutex_t pamLock = PTHREAD_MUTEX_INITIALIZER;
@@ -31,6 +31,7 @@ static PSC_Connection *pamStdin;
 static PSC_Connection *pamStdout;
 static PSC_AsyncTask *currentTask;
 static unsigned refcnt;
+static PamLoginRequest req;
 
 static void pamStdoutReceived(void *receiver, void *sender, void *args)
 {
@@ -39,24 +40,22 @@ static void pamStdoutReceived(void *receiver, void *sender, void *args)
 
     if (!currentTask) return;
 
-    PSC_AsyncTask *task = currentTask;
-    PamLoginRequest *req = PSC_AsyncTask_arg(task);
     PSC_EADataReceived *ea = args;
 
     const char *line = PSC_EADataReceived_text(ea);
     switch (*line)
     {
 	case 'P':
-	    PSC_Connection_sendTextAsync(pamStdin, req->pw, 0);
+	    PSC_Connection_sendTextAsync(pamStdin, req.pw, 0);
 	    break;
 
 	case '1':
-	    req->ok = 1;
+	    req.ok = 1;
 	    ATTR_FALLTHROUGH;
 
 	default:
+	    PSC_AsyncTask_complete(currentTask, 0);
 	    currentTask = 0;
-	    PSC_AsyncTask_complete(task, 0);
 	    break;
     }
 }
@@ -161,8 +160,7 @@ static void destroyChecker(void *obj)
 static void checkAsync(PSC_AsyncTask *task)
 {
     currentTask = task;
-    PamLoginRequest *req = PSC_AsyncTask_arg(task);
-    PSC_Connection_sendTextAsync(pamStdin, req->qualifiedUser, 0);
+    PSC_Connection_sendTextAsync(pamStdin, req.qualifiedUser, 0);
 }
 
 static int check(void *obj, const char *user, const char *pw, char **realname)
@@ -179,16 +177,14 @@ static int check(void *obj, const char *user, const char *pw, char **realname)
 	return 0;
     }
 
-    PamLoginRequest *req = PSC_malloc(sizeof *req);
-    req->ok = 0;
-    snprintf(req->qualifiedUser, sizeof req->qualifiedUser, "%s:%s\n",
+    req.ok = 0;
+    req.pw = pw;
+    snprintf(req.qualifiedUser, sizeof req.qualifiedUser, "%s:%s\n",
 	    self->service, user);
-    snprintf(req->pw, sizeof req->pw, "%s\n", pw);
 
     PSC_AsyncTask *task = PSC_AsyncTask_create(checkAsync);
-    PSC_AsyncTask_await(task, req);
-    int ok = req->ok;
-    free(req);
+    PSC_AsyncTask_await(task, 0);
+    int ok = req.ok;
 
     pthread_mutex_unlock(&pamLock);
 
