@@ -1,4 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
+#if defined(HAVE_MEMSET_S) && !defined(HAVE_MEMSET_EXP)
+#  define __STDC_WANT_LIB_EXT1__ 1
+#endif
 
 #include <errno.h>
 #include <fcntl.h>
@@ -8,6 +11,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#if defined(HAVE_MEMSET_EXP)
+#  define wipemem(p, s) memset_explicit(p, 0, s)
+#elif defined(HAVE_MEMSET_S)
+#  define wipemem(p, s) memset_s(p, s, 0, s)
+#else
+static void *(* volatile memset_v)(void *, int, size_t) = memset;
+#  define wipemem(p, s) memset_v(p, 0, s)
+#endif
 
 static char pass[256];
 static int passread;
@@ -36,7 +48,11 @@ static int pamconv(int num_msg, const struct pam_message **msg,
 		}
 		passread = 1;
 	    }
-	    if (*pass) resp[i]->resp = strdup(pass);
+	    if (*pass)
+	    {
+		resp[i]->resp = strdup(pass);
+		wipemem(pass, sizeof pass);
+	    }
 	}
     }
 
