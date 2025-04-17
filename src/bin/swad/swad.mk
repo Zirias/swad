@@ -3,7 +3,7 @@ GEN_BIN2CSTR_args=	$1 $2
 GEN_CHELP_tool=		$(MKCLIDOC_TARGET)
 GEN_CHELP_args=		-fcpp -o$1 $2
 
-swad_PRECHECK=		MEMSET_EXP MEMSET_S
+swad_PRECHECK=		MEMSET_EXP MEMSET_S EXP_BZERO EXP_BZERO_G EXP_BZERO_S
 MEMSET_EXP_FUNC=	memset_explicit
 MEMSET_EXP_HEADERS=	string.h
 MEMSET_EXP_CFLAGS=	-std=c23
@@ -14,6 +14,19 @@ MEMSET_S_HEADERS=	string.h
 MEMSET_S_CFLAGS=	-D__STC_WANT_LIB_EXT1__=1
 MEMSET_S_ARGS=		void *, rsize_t, int, rsize_t
 MEMSET_S_RETURN=	errno_t
+EXP_BZERO_FUNC=		explicit_bzero
+EXP_BZERO_HEADERS=	string.h
+EXP_BZERO_ARGS=		void *, size_t
+EXP_BZERO_RETURN=	void
+EXP_BZERO_G_FUNC=	explicit_bzero
+EXP_BZERO_G_HEADERS=	string.h
+EXP_BZERO_G_CFLAGS=	-D_DEFAULT_SOURCE
+EXP_BZERO_G_ARGS=	void *, size_t
+EXP_BZERO_G_RETURN=	void
+EXP_BZERO_S_FUNC=	explicit_bzero
+EXP_BZERO_S_HEADERS=	strings.h
+EXP_BZERO_S_ARGS=	void *, size_t
+EXP_BZERO_S_RETURN=	void
 
 swad_VERSION=		0.2
 swad_MODULES=		authenticator \

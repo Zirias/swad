@@ -1,6 +1,8 @@
 #ifndef SWAD_MIDDLEWARE_FORMDATA_H
 #define SWAD_MIDDLEWARE_FORMDATA_H
 
+#include "../util.h"
+
 #include <poser/decl.h>
 #include <stddef.h>
 

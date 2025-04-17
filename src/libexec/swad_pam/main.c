@@ -3,6 +3,24 @@
 #  define __STDC_WANT_LIB_EXT1__ 1
 #endif
 
+#if defined(HAVE_MEMSET_EXP)
+#  define wipemem(p, s) (void)memset_explicit(p, 0, s)
+#elif defined(HAVE_MEMSET_S)
+#  define wipemem(p, s) (void)memset_s(p, s, 0, s)
+#elif defined(HAVE_EXP_BZERO)
+#  define wipemem(p, s) (void)explicit_bzero(p, s)
+#elif defined(HAVE_EXP_BZERO_G)
+#  define wipemem(p, s) (void)explicit_bzero(p, s)
+#  define _DEFAULT_SOURCE
+#elif defined(HAVE_EXP_BZERO_S)
+#  include <strings.h>
+#  define wipemem(p, s) (void)explicit_bzero(p, s)
+#else
+#  include <stddef.h>
+static void *(* volatile wipemem_memset)(void *, int, size_t) = memset;
+#  define wipemem(p, s) wipemem_memset(p, 0, s)
+#endif
+
 #include <errno.h>
 #include <fcntl.h>
 #include <security/pam_appl.h>
@@ -11,15 +29,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#if defined(HAVE_MEMSET_EXP)
-#  define wipemem(p, s) memset_explicit(p, 0, s)
-#elif defined(HAVE_MEMSET_S)
-#  define wipemem(p, s) memset_s(p, s, 0, s)
-#else
-static void *(* volatile memset_v)(void *, int, size_t) = memset;
-#  define wipemem(p, s) memset_v(p, 0, s)
-#endif
 
 static char pass[256];
 static int passread;
