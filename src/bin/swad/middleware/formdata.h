@@ -16,9 +16,9 @@ typedef enum FormDataValidate
 
 C_CLASS_DECL(HttpContext);
 
-const FormData *FormData_get(const HttpContext *context)
-    ATTR_NONNULL((1)) ATTR_PURE;
+FormData *FormData_get(const HttpContext *context) ATTR_NONNULL((1)) ATTR_PURE;
 int FormData_valid(const FormData *self) CMETHOD ATTR_PURE;
+void FormData_wipe(FormData *self, const char *name) CMETHOD ATTR_NONNULL((2));
 const FormParam *FormData_param(const FormData *self,
 	const char *name, const FormParam *curr)
     CMETHOD ATTR_NONNULL((2)) ATTR_PURE;

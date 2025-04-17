@@ -3,6 +3,18 @@ GEN_BIN2CSTR_args=	$1 $2
 GEN_CHELP_tool=		$(MKCLIDOC_TARGET)
 GEN_CHELP_args=		-fcpp -o$1 $2
 
+swad_PRECHECK=		MEMSET_EXP MEMSET_S
+MEMSET_EXP_FUNC=	memset_explicit
+MEMSET_EXP_HEADERS=	string.h
+MEMSET_EXP_CFLAGS=	-std=c23
+MEMSET_EXP_ARGS=	void *, int, size_t
+MEMSET_EXP_RETURN=	void *
+MEMSET_S_FUNC=		memset_s
+MEMSET_S_HEADERS=	string.h
+MEMSET_S_CFLAGS=	-D__STC_WANT_LIB_EXT1__=1
+MEMSET_S_ARGS=		void *, rsize_t, int, rsize_t
+MEMSET_S_RETURN=	errno_t
+
 swad_VERSION=		0.2
 swad_MODULES=		authenticator \
 			config \
@@ -74,3 +86,7 @@ swad_MAN_FILES=		swad.8:swad.cdoc
 endif
 
 $(call binrules,swad)
+
+ifeq ($(swad_HAVE_MEMSET_EXP),1)
+swad_CSTD=		c23
+endif

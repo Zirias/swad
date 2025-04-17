@@ -16,4 +16,6 @@ void appendchr(char **str, size_t *size, size_t *pos, size_t chunksz, char c)
     ATTR_ACCESS((read_write, 1)) ATTR_ACCESS((read_write, 2))
     ATTR_ACCESS((read_write, 3));
 
+void wipemem(void *p, size_t s) ATTR_NONNULL((1));
+
 #endif

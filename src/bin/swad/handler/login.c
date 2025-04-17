@@ -37,7 +37,7 @@ static const char *route = defroute;
 static void doLogin(HttpContext *context, Session *session)
 {
     HttpStatus status = HTTP_SEEOTHER;
-    const FormData *form = FormData_get(context);
+    FormData *form = FormData_get(context);
     const char *rdr = 0;
     if (!form || !FormData_valid(form)) goto done;
 
@@ -60,6 +60,7 @@ static void doLogin(HttpContext *context, Session *session)
 
 	Authenticator *auth = Authenticator_create(session, realm);
 	int ok = Authenticator_login(auth, user, pw);
+	FormData_wipe(form, "pw");
 	if (ok > 0)
 	{
 	    status = HTTP_OK;

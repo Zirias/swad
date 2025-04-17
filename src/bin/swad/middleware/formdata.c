@@ -5,6 +5,7 @@
 #include "../http/httpcontext.h"
 #include "../http/httprequest.h"
 #include "../urlencode.h"
+#include "../util.h"
 #include "../utf8.h"
 
 #include <poser/core/util.h>
@@ -50,7 +51,7 @@ static void formDataDeleter(void *obj)
     free(self);
 }
 
-const FormData *FormData_get(const HttpContext *context)
+FormData *FormData_get(const HttpContext *context)
 {
     return HttpContext_get(context, PROPNAME);
 }
@@ -58,6 +59,22 @@ const FormData *FormData_get(const HttpContext *context)
 int FormData_valid(const FormData *self)
 {
     return self->valid;
+}
+
+void FormData_wipe(FormData *self, const char *name)
+{
+    for (uint8_t p = 0; p < self->nparams; ++p)
+    {
+	if (!strcmp(name, self->params[p].name))
+	{
+	    free(self->params[p].name);
+	    self->params[p].name = 0;
+	    size_t len = strlen(self->params[p].value);
+	    wipemem(self->params[p].value, len);
+	    free(self->params[p].value);
+	    self->params[p].value = 0;
+	}
+    }
 }
 
 const FormParam *FormData_param(const FormData *self,
