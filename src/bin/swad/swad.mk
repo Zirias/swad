@@ -87,6 +87,10 @@ else
 swad_PKGDEPS+=		posercore >= 1.2.3
 endif
 
+swad_INCLUDES+=		-I./include/swadbcrypt
+swad_STATICDEPS+=	swadbcrypt
+swad_LIBS+=		swadbcrypt
+
 ifeq ($(WITH_MAN),1)
 MANFMT:=		$(or $(MANFMT),$(if \
 			$(findstring BSD,$(SYSNAME)),mdoc,man))

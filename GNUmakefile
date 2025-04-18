@@ -44,5 +44,6 @@ posercore_PRECFLAGS:=	-I./poser/include
 $(call zinc, poser/src/lib/core/core.mk)
 endif
 
+$(call zinc, src/lib/swadbcrypt/swadbcrypt.mk)
 $(call zinc, src/bin/swad/swad.mk)
 $(call zinc, src/libexec/swad_pam/swad_pam.mk)
