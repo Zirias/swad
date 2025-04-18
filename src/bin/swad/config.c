@@ -242,7 +242,8 @@ static void readChecker(char *lp)
 	    + nargs * sizeof *checker->args);
     checker->name = PSC_copystr(key);
     checker->nargs = nargs;
-    if (!strcmp(classname, "pam")) checker->class = CC_PAM;
+    if (!strcmp(classname, "file")) checker->class = CC_FILE;
+    else if (!strcmp(classname, "pam")) checker->class = CC_PAM;
     else checker->class = CC_NONE;
     for (size_t i = 0; i < nargs; ++i)
     {

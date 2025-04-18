@@ -1,5 +1,6 @@
 #include "authenticator.h"
 #include "config.h"
+#include "cred/filechecker.h"
 #include "cred/pamchecker.h"
 #include "handler/login.h"
 #include "handler/root.h"
@@ -76,8 +77,14 @@ static void prestartup(void *receiver, void *sender, void *args)
 	    case CC_NONE:
 		break;
 
+	    case CC_FILE:
+		checker = CredentialsChecker_createFile(CfgChecker_arg(c, 0));
+		goto doregister;
+
 	    case CC_PAM:
 		checker = CredentialsChecker_createPam(CfgChecker_arg(c, 0));
+
+	    doregister:
 		Authenticator_registerChecker(CfgChecker_name(c), checker);
 		break;
 	}

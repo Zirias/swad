@@ -31,6 +31,7 @@ EXP_BZERO_S_RETURN=	void
 swad_VERSION=		0.2
 swad_MODULES=		authenticator \
 			config \
+			cred/filechecker \
 			cred/pamchecker \
 			handler/login \
 			handler/root \

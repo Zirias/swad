@@ -14,7 +14,7 @@ It supports authentication methods using a username and a password as
 credentials. For these, different credential checkers can be configured.
 
 Login is offered for configurable realms, which have a name and a stack of
-credential checkers. These checkers  are tried in the order they are
+credential checkers. These checkers are tried in the order they are
 configured for the realm.
 .
 

@@ -18,6 +18,10 @@ sub-requests for authentication, like nginx' `auth_request` module.
 
 ### Available credential checker modules
 
+* `file`: Use a password file partially compatible with Apache's `.htpasswd`
+  files. Supports only `bcrypt` hashes in the `$2a$`, `$2b$` and `$2y$`
+  flavors. A user's real name may be appended to a line in this file after
+  another colon.
 * `pam`: Use PAM with a configurable service name to authenticate. This
   module uses a small child process to perform PAM authentication, which
   does not drop privileges. So, when `swad` is started as root, PAM

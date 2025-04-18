@@ -170,7 +170,21 @@
 # ,------------,-------------------------------------------------------------.
 # | module     | description                                                 |
 # >------------+-------------------------------------------------------------<
+# | file       | Authenticate using a password file.                         |
+# |            |                                                             |
+# |            | This uses a password file that's partially compatible with  |
+# |            | Apache's .htpasswd files. Only the "bcrypt" hashing is      |
+# |            | supported. This means the hash must start with "$2y$" (like |
+# |            | Apache's bcrypt hashes do), or "$2b$" or "$2a$". As an      |
+# |            | extension to Apache's format, a user's real name may be     |
+# |            | appended to a line after another colon, so entries in the   |
+# |            | file are expected to have the following format:             |
+# |            | <username>:$2{aby}$<cost>$<hash>[:<real name>]              |
+# |            |                                                             |
+# |            | arg_1:   Full path to the password file                     |
+# >------------+-------------------------------------------------------------<
 # | pam        | Authenticate with PAM.                                      |
+# |            |                                                             |
 # |            | This module uses a child process that keeps running as the  |
 # |            | user initially starting swad. So it can authenticate with   |
 # |            | PAM modules like pam_unix.so requiring superuser            |
