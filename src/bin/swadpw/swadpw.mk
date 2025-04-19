@@ -1,8 +1,9 @@
 swadpw_VERSION=		$(swad_VERSION)
 swadpw_MODULES=		config \
 			main \
+			password \
 			util
-swadpw_DEFINES=		-DVERSION=\"$(swadpw_VERSION)\"
+swadpw_DEFINES=		$(swad_DEFINES)
 swadpw_INCLUDES=	-I./include/swadbcrypt
 swadpw_STATICDEPS=	swadbcrypt
 swadpw_LIBS=		swadbcrypt
