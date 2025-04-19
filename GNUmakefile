@@ -44,6 +44,12 @@ posercore_PRECFLAGS:=	-I./poser/include
 $(call zinc, poser/src/lib/core/core.mk)
 endif
 
+GEN_BIN2CSTR_tool=	$(BIN2CSTR_TARGET)
+GEN_BIN2CSTR_args=	$1 $2
+GEN_CHELP_tool=		$(MKCLIDOC_TARGET)
+GEN_CHELP_args=		-fcpp -o$1 $2
+
 $(call zinc, src/lib/swadbcrypt/swadbcrypt.mk)
+$(call zinc, src/bin/swadpw/swadpw.mk)
 $(call zinc, src/bin/swad/swad.mk)
 $(call zinc, src/libexec/swad_pam/swad_pam.mk)

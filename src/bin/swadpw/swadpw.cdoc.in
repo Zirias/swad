@@ -1,0 +1,74 @@
+name: swadpw
+comment: Password file management tool for SWAD
+date: 20250419
+author: Felix Palmen <felix@palmen-it.de>
+version: v%%VERSION%%
+license: BSD 2-clause (all rights reserved)
+www: https://github.com/Zirias/swad
+description:
+%%name%% allows to create and edit password files for `swad` to be used with
+its `file` credential checker. It uses `bcrypt` password hashes in flavors
+`$2b$` or `$2y$`. They are internally the same, `$2b$` is the default of
+OpenBSD's bcrypt implementation used by `swad`, while `$2y$` is what Apache
+uses.
+
+Files created by %%name%% are fully compatible with Apache's `.htpasswd`
+format when the `$2y$` hash flavor is chosen and no real names are given for
+users.
+.
+
+defgroup: 2
+
+[flag a]
+description:
+Add a new user to the password file. Fails if the user already exists.
+.
+default: Edit an existing user, fail if the user doesn't exist.
+
+[flag b]
+description: Always use the OpenBSD flavor for `bcrypt` hashes (`$2b$`).
+default: Prefer OpenBSD, but leave Apache flavor (`$2y$`) when editing.
+
+[flag c cost]
+description:
+Set the cost factor for newly created `bcrypt` password hashes. The time
+needed to hash a password grows exponentially with this factor. For sensible
+password security, a factor of at least `12` is recommended nowadays. Setting
+the factor too high will cause significant CPU load for every user login.
+.
+default: 12
+min: 10
+max: 255
+
+[flag f file]
+optional: 0
+description: Path to the password file to edit or create.
+
+[flag h]
+group: 1
+optional: 0
+description: Print a help text and exit.
+
+[flag n name]
+description: Set an optional real name %%arg%% for the user added or edited.
+
+[flag s]
+description:
+Allow reading the password from plain standard input if not connected to a
+terminal. This is required to use %%name%% in a pipe.
+.
+default: Fail when standard input is not a terminal.
+
+[flag V]
+group: 0
+optional: 0
+description: Print version information and exit.
+
+[flag y]
+description: Always use the Apache flavor for `bcrypt` hashes (`$2y$`).
+default: Prefer OpenBSD (`$2b$`), but leave Apache flavor when editing.
+
+[arg user]
+optional: 0
+description: The user to add or modify.
+
