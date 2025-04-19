@@ -4,7 +4,8 @@
 typedef enum ConfigMode
 {
     CM_EDIT,
-    CM_APPEND
+    CM_APPEND,
+    CM_DELETE
 } ConfigMode;
 
 typedef enum ConfigPwMethod

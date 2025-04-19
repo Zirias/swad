@@ -40,6 +40,11 @@ default: 12
 min: 10
 max: 255
 
+[flag d]
+description:
+Delete the given user from the password file. Fails if the user doesn't exist.
+.
+
 [flag f file]
 optional: 0
 description: Path to the password file to edit or create.

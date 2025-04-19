@@ -140,6 +140,10 @@ int Config_init(int argc, char **argv)
 			type = CHT_OPENBSD;
 			break;
 
+		    case 'd':
+			mode = CM_DELETE;
+			break;
+
 		    case 'h':
 			help(prgname);
 			return 1;
