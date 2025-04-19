@@ -106,3 +106,11 @@ int swad_bcrypt_check(const char *pw, const char *hash)
     return ok;
 }
 
+int swad_bcrypt_hash(char *buf, size_t sz, int log_rounds, const char *pw)
+{
+    char salt[BCRYPT_SALTSPACE];
+    if (bcrypt_initsalt(log_rounds, salt, sizeof salt) != 0) return -1;
+    if (bcrypt_hashpass(pw, salt, buf, sz) == 0) return -1;
+    return 0;
+}
+
