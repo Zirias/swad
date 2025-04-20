@@ -2,6 +2,7 @@ swadpw_VERSION=		$(swad_VERSION)
 swadpw_MODULES=		config \
 			main \
 			password \
+			pwfile \
 			util
 swadpw_DEFINES=		$(swad_DEFINES)
 swadpw_INCLUDES=	-I./include/swadbcrypt

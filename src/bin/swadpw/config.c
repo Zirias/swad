@@ -59,7 +59,7 @@ static int optArg(char *args, int *idx, char *op, const char **error)
     switch (args[--*idx])
     {
 	case 'c':
-	    if (intArg(&cost, op, 10, 255, 10) < 0)
+	    if (intArg(&cost, op, 10, 99, 10) < 0)
 	    {
 		*error = "Invalid value for cost (-c)";
 		return -1;

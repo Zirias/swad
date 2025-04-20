@@ -125,6 +125,11 @@ static Password *readFromTerminal(const char *user)
 	error = "Unexpected I/O error.\n";
 	goto done;
     }
+    if (!pw2[0])
+    {
+	error = "Empty password rejected, aborting.\n";
+	goto done;
+    }
 
     if (interrupted) goto done;
 
@@ -139,22 +144,20 @@ static Password *readFromTerminal(const char *user)
 
     if (strcmp(self->pw, pw2))
     {
-	fputs("Passwords do not match, aborting.\n", stderr);
-	Password_destroy(self);
-	self = 0;
+	error = "Passwords do not match, aborting.\n";
     }
 
 done:
     wipemem(pw2, sizeof pw2);
     for (unsigned j = 0; j < i; ++j) sigaction(intrsigs[j], origsa+j, 0);
     tcsetattr(STDIN_FILENO, TCSANOW, &tios);
-    if (interrupted)
+    if (interrupted) error = "Password input interrupted.\n";
+    if (error)
     {
-	error = "Password input interrupted.\n";
 	Password_destroy(self);
 	self = 0;
+	fputs(error, stderr);
     }
-    if (error) fputs(error, stderr);
     return self;
 }
 

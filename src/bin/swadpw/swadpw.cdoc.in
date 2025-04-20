@@ -15,8 +15,15 @@ uses.
 Files created by %%name%% are fully compatible with Apache's `.htpasswd`
 format when the `$2y$` hash flavor is chosen and no real names are given for
 users.
-.
 
+In the standard mode of operation, passwords are expected to be typed on a
+terminal. The terminal's local echo is disabled for typing a password, IOW,
+you can't see what you type. Therefore, you have to type the password twice
+to make sure it was typed correctly. The only way to correct typing errors is
+the "backspace" key, all other control characters aren't handled and will mess
+up what you typed.
+.
+manrefs: swad.8
 defgroup: 2
 
 [flag a]
@@ -38,7 +45,7 @@ the factor too high will cause significant CPU load for every user login.
 .
 default: 12
 min: 10
-max: 255
+max: 99
 
 [flag d]
 description:
