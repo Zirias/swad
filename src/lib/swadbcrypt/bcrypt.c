@@ -4,6 +4,7 @@
 #endif
 
 #include <stddef.h>
+#include <stdint.h>
 
 #if defined(HAVE_MEMSET_EXP)
 #  define explicit_bzero(p, s) memset_explicit(p, 0, s)
@@ -78,8 +79,12 @@ static int (* volatile timingsafe_bcmp)(
 #  define CLOCK_THREAD_CPUTIME_ID CLOCK_MONOTONIC
 #endif
 
-#include <poser/core/random.h>
-#define arc4random_buf(p, s) PSC_Random_bytes(p, s, PSC_RF_SECURE)
+#ifdef HAVE_ARC4R
+void arc4random_buf(void *buf, size_t nbytes);
+#else
+#  include "random.h"
+#  define arc4random_buf(p, s) swadbcrypt_random(p, s)
+#endif
 
 #include <pwd.h>
 #ifndef _PASSWORD_LEN

@@ -1,6 +1,8 @@
 #ifndef SWADBCRYPT_SWADBCRYPT_H
 #define SWADBCRYPT_SWADBCRYPT_H
 
+#include <stddef.h>
+
 #define BCRYPT_HASHSZ 61
 
 int swad_bcrypt_check(const char *pw, const char *hash);
