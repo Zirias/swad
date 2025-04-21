@@ -26,8 +26,6 @@ EXP_BZERO_S_RETURN=	void
 swad_VERSION=		0.2
 swad_MODULES=		authenticator \
 			config \
-			cred/filechecker \
-			cred/pamchecker \
 			handler/login \
 			handler/root \
 			htmlescape \
@@ -72,6 +70,16 @@ swad_DOCS=		README.md \
 			LICENSE.txt
 swad_EXTRADIRS=		sysconf
 swad_sysconf_FILES=	swad.conf.sample
+
+ifeq ($(CRED_FILE),1)
+swad_MODULES+=		cred/filechecker
+swad_DEFINES+=		-DCRED_FILE
+endif
+
+ifeq ($(CRED_PAM),1)
+swad_MODULES+=		cred/pamchecker
+swad_DEFINES+=		-DCRED_PAM
+endif
 
 ifeq ($(BUNDLED_POSER),1)
 swad_STATICDEPS+=	posercore

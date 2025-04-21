@@ -1,7 +1,5 @@
 #include "authenticator.h"
 #include "config.h"
-#include "cred/filechecker.h"
-#include "cred/pamchecker.h"
 #include "handler/login.h"
 #include "handler/root.h"
 #include "http/httprequest.h"
@@ -13,6 +11,14 @@
 #include "middleware/formdata.h"
 #include "middleware/pathparser.h"
 #include "middleware/session.h"
+
+#ifdef CRED_FILE
+#  include "cred/filechecker.h"
+#endif
+
+#ifdef CRED_PAM
+#  include "cred/pamchecker.h"
+#endif
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -69,7 +75,13 @@ static void prestartup(void *receiver, void *sender, void *args)
     Authenticator_init();
 
     const CfgChecker *c;
+#if defined(CRED_FILE) || defined(CRED_PAM)
     CredentialsChecker *checker;
+#endif
+#if !defined(CRED_FILE) || !defined(CRED_PAM)
+    const char *checkerClassName;
+    const char *checkerBuildOpt;
+#endif
     for (size_t i = 0; (c = Config_checker(i)); ++i)
     {
 	switch (CfgChecker_class(c))
@@ -78,15 +90,39 @@ static void prestartup(void *receiver, void *sender, void *args)
 		break;
 
 	    case CC_FILE:
+#ifdef CRED_FILE
 		checker = CredentialsChecker_createFile(CfgChecker_arg(c, 0));
 		goto doregister;
+#else
+		checkerClassName = "file";
+		checkerBuildOpt = "CRED_FILE";
+		goto dofail;
+#endif
 
 	    case CC_PAM:
+#ifdef CRED_PAM
 		checker = CredentialsChecker_createPam(CfgChecker_arg(c, 0));
+		goto doregister;
+#else
+		checkerClassName = "pam";
+		checkerBuildOpt = "CRED_PAM";
+		goto dofail;
+#endif
 
+#if defined(CRED_FILE) || defined(CRED_PAM)
 	    doregister:
 		Authenticator_registerChecker(CfgChecker_name(c), checker);
 		break;
+#endif
+
+#if !defined(CRED_FILE) || !defined(CRED_PAM)
+	    dofail:
+		PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s will "
+			"always fail, because swad was built without support "
+			"for %s. Rebuild with %s enabled to fix this.",
+			CfgChecker_name(c), checkerClassName, checkerBuildOpt);
+		break;
+#endif
 	}
     }
 

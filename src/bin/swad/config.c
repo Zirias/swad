@@ -244,7 +244,13 @@ static void readChecker(char *lp)
     checker->nargs = nargs;
     if (!strcmp(classname, "file")) checker->class = CC_FILE;
     else if (!strcmp(classname, "pam")) checker->class = CC_PAM;
-    else checker->class = CC_NONE;
+    else
+    {
+	PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown credentials "
+		"checker class `%s', this checker will always fail",
+		cfgfile, lineno, key);
+	checker->class = CC_NONE;
+    }
     for (size_t i = 0; i < nargs; ++i)
     {
 	checker->args[i] = PSC_copystr(args[i]);

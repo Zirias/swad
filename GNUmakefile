@@ -1,4 +1,5 @@
-BOOLCONFVARS_ON=	BUNDLED_POSER WITH_MAN WITH_POSER_TLS
+BOOLCONFVARS_ON=	BUNDLED_POSER WITH_MAN WITH_POSER_TLS \
+			CRED_FILE CRED_PAM
 BOOLCONFVARS_OFF=	WITH_POSER_POLL WITH_POSER_EPOLL WITH_POSER_KQUEUE \
 			WITHOUT_POSER_EPOLL WITHOUT_POSER_KQUEUE
 SINGLECONFVARS=		MANFMT OPENSSLINC OPENSSLLIB POSER_FD_SETSIZE
@@ -55,7 +56,16 @@ GEN_MAN8_args=		-f$(MANFMT),sect=8 -o$1 $2
 MANFMT:=		$(or $(MANFMT),$(if \
 			$(findstring BSD,$(SYSNAME)),mdoc,man))
 
+ifeq ($(CRED_FILE),1)
 $(call zinc, src/lib/swadbcrypt/swadbcrypt.mk)
+endif
+
 $(call zinc, src/bin/swad/swad.mk)
+
+ifeq ($(CRED_FILE),1)
 $(call zinc, src/bin/swadpw/swadpw.mk)
+endif
+
+ifeq ($(CRED_PAM),1)
 $(call zinc, src/libexec/swad_pam/swad_pam.mk)
+endif
