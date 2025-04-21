@@ -169,3 +169,137 @@ pam_swad = pam:swad
 Secret = pam_swad
 ```
 
+## Building
+
+To obtain the source from git, make sure to include submodules, e.g. with the
+`--recurse-submodules` option to `git clone`. Release tarballs will include
+everything needed for building.
+
+Dependencies:
+
+* A C compiler understanding GNU commandline options and the C11 standard
+  (GNU GCC and LLVM clang work fine)
+* GNU make
+* OpenSSL, or a compatible implementation like LibreSSL, when building with
+  bundled poser and TLS enabled
+* PAM (libpam and headers) when building with the PAM credentials checker
+
+To build and install swad, you can simply type
+
+    make
+    make install
+
+If your default `make` utility is not GNU make (like e.g. on a BSD system),
+install GNU make first and type `gmake` instead of `make`.
+
+### Build options
+
+Options can be given as variables in each make invocation, e.g. like this:
+
+    make FOO=yes
+    make FOO=yes install
+
+Alternatively, they can be saved and are then used automatically, like this:
+
+    make FOO=on config
+    make
+    make install
+
+The following build options are available:
+
+* `BUNDLED_POSER` (bool): Uses the bundled poser lib and links it statically.
+  When disabled, poser must be installed and will be linked as a shared
+  library.
+
+  Default: `on`.
+
+* `WITH_POSER_TLS` (bool, only for `BUNDLED_POSER=on`): Build with TLS
+  support, required for https.
+
+  Default: `on`.
+
+* `OPENSSLINC`/`OPENSSLLIB` (paths, only for `WITH_POSER_TLS=on`): Override
+  base paths to OpenSSL includes and libraries.
+
+  Default: Obtain from pkg-config.
+
+* `WITH_POSER_POLL` (bool, only for `BUNDLED_POSER=on`): Use `poll()` instead
+  of `select()` for obtaining events when neither `kqueue()` nor `epoll()`
+  are available. With `poll()`, there is no hard limit on concurrent clients,
+  but performance may scale even worse than with `select()` because more data
+  has to be passed in and out of the kernel for every call.
+
+  Default: `off`
+
+* `POSER_FD_SETSIZE` (number, only for `BUNDLED_POSER=on`): When `select()` is
+  used for obtaining events, try to configure it for allowing this many
+  concurrent file descriptors. Not all systems allow doing this, they will
+  typically have a hardcoded limit of `1024`.
+
+  Default: `4096`
+
+* `WITH_POSER_EPOLL` (bool, only for `BUNDLED_POSER=on`): Require `epoll()`,
+  fail the build if `epoll()` is not available.
+
+  Default: `off`
+
+* `WITHOUT_POSER_EPOLL` (bool, only for `BUDNLED_POSER=on`): Never use
+  `epoll()` even if detected.
+
+  Default: `off`
+
+* `WITH_POSER_KQUEUE` (bool, only for `BUNDLED_POSER=on`): Require `kqueue()`,
+  fail the build if `kqueue()` is not available.
+
+  Default: `off`
+
+* `WITHOUT_POSER_KQUEUE` (bool, only for `BUDNLED_POSER=on`): Never use
+  `kqueue()` even if detected.
+
+  Default: `off`
+
+* `WITH_MAN` (bool): Build and install manpages.
+
+  Default: `on`
+
+* `MANFMT` (string): The format for the manpages. Valid values are `mdoc` for
+  BSD-style mandoc format, or `man` for the classic format based on the man
+  macro package for troff.
+
+  Default: `mdoc` if the OS name contains "BSD", `man` otherwise
+
+* `CRED_FILE` (bool): Build with the "file" credentials checker. Also build
+  and install the swadpw(1) tool.
+
+  Default: `on`
+
+* `CRED_PAM` (bool): Build with the "pam" credentials checker. Also build and
+  install the required pam helper binary.
+
+  Default: `on`
+
+### Advanced build configuration
+
+Swad uses a custom build system called `zimk`, which is included as a git
+submodule. This offers a lot of generic build configuration possibilities.
+
+For a list of all configuration variables, most of which can be overridden and
+saved with `make config` as described above, type
+
+    make showconfig
+
+This will also show the fully expanded value of all available variables.
+
+There are also a few special variables which are not saved with the
+configuration:
+
+* `DESTDIR` (string): Only used during `make install`, the value of `DESTDIR`
+  is prepended to the path of every installed file.
+* `PREFIX` (string): Convenience equivalent to the configuration variable
+  `prefix` (defaulting to `/usr/local`), for compatibility with other build
+  systems.
+* `V` (0/1) and `COLORS` (0/1): These override *verbose* and *colored*
+  output of the build. By default, verbose output is chosen when the output
+  doesn't go to a terminal, colored output is only chosen when the output goes
+  to a terminal with color support.
+
