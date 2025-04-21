@@ -88,14 +88,10 @@ swad_STATICDEPS+=	swadbcrypt
 swad_LIBS+=		swadbcrypt
 
 ifeq ($(WITH_MAN),1)
-MANFMT:=		$(or $(MANFMT),$(if \
-			$(findstring BSD,$(SYSNAME)),mdoc,man))
-GEN_MAN_tool=		$(MKCLIDOC_TARGET)
-GEN_MAN_args=		-f$(MANFMT),sect=$(swad_MANSECT) -o$1 $2
 swad_MANSECT=		8
 swad_MAN8=		swad
-swad_GEN+=		MAN
-swad_MAN_FILES=		swad.8:swad.cdoc
+swad_GEN+=		MAN8
+swad_MAN8_FILES=	swad.8:swad.cdoc
 endif
 
 $(call binrules,swad)

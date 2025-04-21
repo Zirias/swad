@@ -34,4 +34,5 @@ src/bin/swad/swad.cdoc
 src/bin/swad/swad.8
 src/bin/swad/help.h
 src/bin/swadpw/swadpw.cdoc
+src/bin/swadpw/swadpw.1
 src/bin/swadpw/help.h

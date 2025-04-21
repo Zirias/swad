@@ -12,4 +12,10 @@ swadpw_GEN=		CHELP
 swadpw_CHELP_FILES=	help.h:swadpw.cdoc
 swadpw_SUB_FILES=	swadpw.cdoc
 
+ifeq ($(WITH_MAN),1)
+swadpw_MAN1=		swadpw
+swadpw_GEN+=		MAN
+swadpw_MAN_FILES=	swadpw.1:swadpw.cdoc
+endif
+
 $(call binrules,swadpw)
