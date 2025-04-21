@@ -83,8 +83,8 @@
 #
 # [server:tls]
 # tls = on
-# tls_cert_file = /etc/ssl/cert/swad.crt
-# tls_key_file = /etc/ssl/private/swad.key
+# tls_cert_file = %%SYSCONFDIR%%/swad/swad.crt
+# tls_key_file = %%SYSCONFDIR%%/swad/swad.key
 # port = 8443
 #
 [server]
@@ -181,6 +181,8 @@
 # |            | file are expected to have the following format:             |
 # |            | <username>:$2{aby}$<cost>$<hash>[:<real name>]              |
 # |            |                                                             |
+# |            | The password file can be edited using the swadpw(1) tool.   |
+# |            |                                                             |
 # |            | arg_1:   Full path to the password file                     |
 # >------------+-------------------------------------------------------------<
 # | pam        | Authenticate with PAM.                                      |
@@ -196,6 +198,7 @@
 # Example:
 #
 # [checkers]
+# passwd = file:%%SYSCONFDIR%%/swad/passwd
 # pam_system = pam:system
 #
 [checkers]
@@ -226,7 +229,7 @@
 # Example:
 #
 # [realms]
-# MySecretService = pam_system
+# MySecretService = passwd:pam_system
 # MySecretService_login_fail_limit = 1800:3
 #
 [realms]
