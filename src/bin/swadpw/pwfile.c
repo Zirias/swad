@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 static char buf[16 * 1024];
@@ -284,8 +285,13 @@ int PwFile_write(PwFile *self)
     char *tmpnm = xmalloc(tmpsz + 1);
     snprintf(tmpnm, tmpsz, tmpfmt, self->path, (unsigned)getpid());
 
+    struct stat st;
+    int havest = 0;
+    if (stat(self->path, &st) == 0) havest = 1;
+
     int rc = -1;
-    int tmpfd = open(tmpnm, O_WRONLY|O_CREAT|O_EXCL, 0600);
+    int tmpfd = open(tmpnm, O_WRONLY|O_CREAT|O_EXCL,
+	    havest ? st.st_mode :  0600);
     if (tmpfd < 0)
     {
 	fprintf(stderr, "Error creating temp file for %s: %s\n",
@@ -320,6 +326,7 @@ int PwFile_write(PwFile *self)
 	fprintf(stderr, "Error overwriting %s: %s\n",
 		self->path, strerror(errno));
     }
+    if (havest) chown(self->path, st.st_uid, st.st_gid);
     rc = 0;
 
 done:
