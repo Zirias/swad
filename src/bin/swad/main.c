@@ -12,6 +12,10 @@
 #include "middleware/pathparser.h"
 #include "middleware/session.h"
 
+#ifdef CRED_EXEC
+#  include "cred/execchecker.h"
+#endif
+
 #ifdef CRED_FILE
 #  include "cred/filechecker.h"
 #endif
@@ -75,10 +79,10 @@ static void prestartup(void *receiver, void *sender, void *args)
     Authenticator_init();
 
     const CfgChecker *c;
-#if defined(CRED_FILE) || defined(CRED_PAM)
+#if defined(CRED_EXEC) || defined(CRED_FILE) || defined(CRED_PAM)
     CredentialsChecker *checker;
 #endif
-#if !defined(CRED_FILE) || !defined(CRED_PAM)
+#if !defined(CRED_EXEC) || !defined(CRED_FILE) || !defined(CRED_PAM)
     const char *checkerClassName;
     const char *checkerBuildOpt;
 #endif
@@ -88,6 +92,16 @@ static void prestartup(void *receiver, void *sender, void *args)
 	{
 	    case CC_NONE:
 		break;
+
+	    case CC_EXEC:
+#ifdef CRED_EXEC
+		checker = CredentialsChecker_createExec(CfgChecker_arg(c, 0));
+		goto doregister;
+#else
+		checkerClassName = "exec";
+		checkerBuildOpt = "CRED_EXEC";
+		goto dofail;
+#endif
 
 	    case CC_FILE:
 #ifdef CRED_FILE

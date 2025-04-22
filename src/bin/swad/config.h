@@ -16,6 +16,7 @@ C_CLASS_DECL(PSC_IpAddr);
 typedef enum CheckerClass
 {
     CC_NONE,
+    CC_EXEC,
     CC_FILE,
     CC_PAM
 } CheckerClass;

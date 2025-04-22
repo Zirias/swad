@@ -71,6 +71,11 @@ swad_DOCS=		README.md \
 swad_EXTRADIRS=		sysconf
 swad_sysconf_FILES=	swad.conf.sample
 
+ifeq ($(CRED_EXEC),1)
+swad_MODULES+=		cred/execchecker
+swad_DEFINES+=		-DCRED_EXEC
+endif
+
 ifeq ($(CRED_FILE),1)
 swad_MODULES+=		cred/filechecker
 swad_DEFINES+=		-DCRED_FILE
