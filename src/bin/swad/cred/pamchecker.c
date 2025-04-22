@@ -126,8 +126,7 @@ static void createProcess(void)
     pthread_mutex_lock(&pamLock);
     if (refcnt)
     {
-	if (!pamProcess) return;
-	++refcnt;
+	if (pamProcess) ++refcnt;
 	pthread_mutex_unlock(&pamLock);
 	return;
     }
