@@ -4,6 +4,8 @@
 
 #include "util.h"
 
+#include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,7 +44,37 @@ static Password *readFromStdin(void)
     return self;
 }
 
-static int readpw(char *buf, size_t bufsz, const struct termios *tios)
+static int writeprompt(int *fd, const void *buf, size_t nbytes,
+	const char **error)
+{
+    if (*fd < 0) *fd = STDIN_FILENO;
+    ssize_t rc;
+    if ((rc = write(*fd, buf, nbytes)) < 0)
+    {
+	if (errno != EBADF) goto ioerr;
+	char *ttynm = ttyname(STDIN_FILENO);
+	if (!ttynm) goto ioerr;
+	*fd = open(ttynm, O_WRONLY);
+	if (*fd < 0)
+	{
+	    if (!isatty(STDERR_FILENO)) goto notty;
+	    *fd = STDERR_FILENO;
+	}
+	if ((rc = write(*fd, buf, nbytes) < 0)) goto ioerr;
+    }
+    return rc;
+
+notty:
+    if (error)
+    {
+	*error = "Can't figure out how to write a prompt to the terminal.\n";
+    }
+ioerr:
+    return -1;
+}
+
+static int readpw(char *buf, size_t bufsz,
+	const struct termios *tios, int promptfd)
 {
     unsigned char c;
     size_t pos = 0;
@@ -78,7 +110,7 @@ static int readpw(char *buf, size_t bufsz, const struct termios *tios)
     }
 
     if (tcsetattr(STDIN_FILENO, TCSANOW, tios) < 0) return -1;
-    if (write(STDOUT_FILENO, "\n", 1) != 1) return -1;
+    if (writeprompt(&promptfd, "\n", 1, 0) != 1) return -1;
     return rc;
 }
 
@@ -88,6 +120,7 @@ static Password *readFromTerminal(const char *user)
     char pw2[PW_MAXSZ];
     Password *self = 0;
     const char *error = 0;
+    int pfd = -1;
     unsigned i;
     struct sigaction sa;
     struct sigaction origsa[sizeof intrsigs / sizeof *intrsigs];
@@ -119,10 +152,10 @@ static Password *readFromTerminal(const char *user)
     if (interrupted) goto done;
 
     int len = snprintf(prompt, sizeof prompt, "NEW password for %s: ", user);
-    if (write(STDOUT_FILENO, prompt, len) < 0
-	    || readpw(pw2, sizeof pw2, &tios) < 0)
+    if (writeprompt(&pfd, prompt, len, &error) < 0
+	    || readpw(pw2, sizeof pw2, &tios, pfd) < 0)
     {
-	error = "Unexpected I/O error.\n";
+	if (!error) error = "Unexpected I/O error.\n";
 	goto done;
     }
     if (!pw2[0])
@@ -134,11 +167,11 @@ static Password *readFromTerminal(const char *user)
     if (interrupted) goto done;
 
     self = xmalloc(sizeof *self);
-    if (write(STDOUT_FILENO, "Confirm new password: ",
-	    sizeof "Confirm new password:") < 0
-	    || readpw(self->pw, sizeof self->pw, &tios) < 0)
+    if (writeprompt(&pfd, "Confirm new password: ",
+		sizeof "Confirm new password:", &error) < 0
+	    || readpw(self->pw, sizeof self->pw, &tios, pfd) < 0)
     {
-	error = "Unexpected I/O error.\n";
+	if (!error) error = "Unexpected I/O error.\n";
 	goto done;
     }
 
@@ -158,6 +191,7 @@ done:
 	self = 0;
 	fputs(error, stderr);
     }
+    if (pfd >= 0 && pfd != STDIN_FILENO && pfd != STDERR_FILENO) close(pfd);
     return self;
 }
 
