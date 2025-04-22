@@ -34,7 +34,14 @@ static int check(void *obj, const char *user, const char *pw, char **realname)
 	    *hash++ = 0;
 	    if (strcmp(buf, user)) continue;
 	    char *rn = strchr(hash, ':');
-	    if (rn) *rn++ = 0;
+	    char *nl = 0;
+	    if (rn)
+	    {
+		*rn++ = 0;
+		nl = strchr(rn, '\n');
+	    }
+	    else nl = strchr(hash, '\n');
+	    if (nl) *nl = 0;
 	    // verify we DO have a bcrypt hash
 	    if (hash[0] != '$' || hash[1] != '2') continue;
 	    // treat apache/php "2y" flavor as "2b"
