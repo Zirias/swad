@@ -326,7 +326,14 @@ int PwFile_write(PwFile *self)
 	fprintf(stderr, "Error overwriting %s: %s\n",
 		self->path, strerror(errno));
     }
-    if (havest) chown(self->path, st.st_uid, st.st_gid);
+    if (havest)
+    {
+	if (chown(self->path, st.st_uid, st.st_gid) < 0)
+	{
+	    fprintf(stderr, "Warning: Could not preserve the original owner "
+		    "of %s\n", self->path);
+	}
+    }
     rc = 0;
 
 done:
