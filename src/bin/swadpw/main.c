@@ -23,7 +23,8 @@ int main(int argc, char **argv)
 	if (PwFile_deleteEntry(pwf, Config_user()) == 0
 		&& PwFile_write(pwf) == 0)
 	{
-	    printf("Deleted user %s from %s.\n", Config_user(), Config_path());
+	    fprintf(stderr, "Deleted user %s from %s.\n",
+		    Config_user(), Config_path());
 	    rc = EXIT_SUCCESS;
 	}
 	goto done;
@@ -61,11 +62,12 @@ int main(int argc, char **argv)
 
     if (Config_mode() == CM_APPEND)
     {
-	printf("Added user %s to %s.\n", Config_user(), Config_path());
+	fprintf(stderr, "Added user %s to %s.\n",
+		Config_user(), Config_path());
     }
     else
     {
-	printf("Changed password for %s in %s.\n",
+	fprintf(stderr, "Changed password for %s in %s.\n",
 		Config_user(), Config_path());
     }
     rc = EXIT_SUCCESS;
