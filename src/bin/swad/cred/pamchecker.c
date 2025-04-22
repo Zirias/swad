@@ -73,7 +73,6 @@ static void pamHelperDone(void *receiver, void *sender, void *args)
     }
 
     pamStdin = 0;
-    if (pamStdout) PSC_Connection_close(pamStdout, 0);
     pamStdout = 0;
     pamProcess = 0;
     pthread_mutex_unlock(&pamLock);
