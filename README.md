@@ -18,6 +18,11 @@ sub-requests for authentication, like nginx' `auth_request` module.
 
 ### Available credential checker modules
 
+* `exec`: Execute an external tool to check the credentials. The tool is
+  called with the user name as the single argument, and the password is
+  written to its standard input. An exit code of 0 indicates successful login,
+  any non-zero exit code indicates failure. The tool may write a "real name"
+  to its standard output.
 * `file`: Use a password file partially compatible with Apache's `.htpasswd`
   files. Supports only `bcrypt` hashes in the `$2a$`, `$2b$` and `$2y$`
   flavors. A user's real name may be appended to a line in this file after
@@ -27,8 +32,6 @@ sub-requests for authentication, like nginx' `auth_request` module.
   does not drop privileges. So, when `swad` is started as root, PAM
   authentication will also work for PAM modules which require root
   privileges, like `pam_unix.so`.
-
-More modules are planned.
 
 ## How it works
 
@@ -267,6 +270,10 @@ The following build options are available:
   macro package for troff.
 
   Default: `mdoc` if the OS name contains "BSD", `man` otherwise
+
+* `CRED_EXEC` (bool): Build with the "exec" credentials checker.
+
+  Default: `on`
 
 * `CRED_FILE` (bool): Build with the "file" credentials checker. Also build
   and install the swadpw(1) tool.
