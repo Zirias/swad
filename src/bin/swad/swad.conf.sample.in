@@ -170,6 +170,27 @@
 # ,------------,-------------------------------------------------------------.
 # | module     | description                                                 |
 # >------------+-------------------------------------------------------------<
+# | exec       | Authenticate by executing an external tool.                 |
+# |            |                                                             |
+# |            | This executes an external tool with the user name given as  |
+# |            | its single argument and the password written to its         |
+# |            | standard input. The tool must exit with an exit code of 0   |
+# |            | to indicate a successful login, any non-zero exit code is   |
+# |            | interpreted as login failure. If the tool writes something  |
+# |            | to its standard output, this is interpreted as the user's   |
+# |            | real name.                                                  |
+# |            |                                                             |
+# |            | Dummy example succeeding when the password equals the user  |
+# |            | name:                                                       |
+# |            |   #!/bin/sh                                                 |
+# |            |   read pw                                                   |
+# |            |   test "$pw" = "$1"                                         |
+# |            |                                                             |
+# |            | arg_1:   Full path to the tool to execute                   |
+# |            | arg_2:   Execution timeout in ms (optional, default: 10000) |
+# |            | arg_3:   Force-kill timeout in ms, if the tool ignores      |
+# |            |          SIGTERM (optional, default: 5000)                  |
+# >------------+-------------------------------------------------------------<
 # | file       | Authenticate using a password file.                         |
 # |            |                                                             |
 # |            | This uses a password file that's partially compatible with  |
@@ -198,6 +219,7 @@
 # Example:
 #
 # [checkers]
+# snakeoil = exec:%%SYSCONFDIR%%/swad/check.sh:2000:2000
 # passwd = file:%%SYSCONFDIR%%/swad/passwd
 # pam_system = pam:system
 #
@@ -229,7 +251,7 @@
 # Example:
 #
 # [realms]
-# MySecretService = passwd:pam_system
+# MySecretService = snakeoil:passwd:pam_system
 # MySecretService_login_fail_limit = 1800:3
 #
 [realms]
