@@ -18,7 +18,13 @@
 
 #define ROUTESCHUNK 32
 #define MIDDLEWARESCHUNK 8
+
+/* close connection after 10s of inactivity, unless a request is currently
+ * handled */
 #define CONNTIMEOUT 10
+
+/* timeout requests after 15 seconds, not counting time waiting for async
+ * tasks */
 #define REQUESTTIMEOUT 30
 
 #define CTXLOGKEY "_LOGRECORD"
@@ -350,9 +356,10 @@ static void pipelineJobDone(void *receiver, void *sender, void *args)
     PSC_ThreadJob *job = sender;
     HttpContext *context = args;
     PSC_Connection *conn = HttpContext_connection(context);
+    ConnectionContext *ctx = PSC_Connection_data(conn);
+    PSC_Timer_start(ctx->timer, 0);
 
     HttpRequest *req = HttpContext_request(context);
-    HttpResponse *response = HttpContext_response(context);
 
     if (job)
     {
@@ -360,15 +367,16 @@ static void pipelineJobDone(void *receiver, void *sender, void *args)
 		pipelineJobCanceled, 0);
 	if (!PSC_ThreadJob_hasCompleted(job))
 	{
-	    HttpResponse_destroy(response);
-	    response = HttpResponse_createError(HTTP_SERVICEUNAVAILABLE,
-		    "Request timed out.");
+	    HttpContext_setResponse(context, HttpResponse_createError(
+			HTTP_SERVICEUNAVAILABLE, "Request timed out."));
 	}
     }
 
+    HttpResponse *response = HttpContext_response(context);
     if (!response)
     {
 	response = HttpResponse_createError(HTTP_INTERNALSERVERERROR, 0);
+	HttpContext_setResponse(context, response);
     }
 
     logResponse(self, context);
@@ -488,6 +496,10 @@ done:
 		    pipelineJobCanceled, 0);
 	    PSC_ThreadJob_destroy(ctx->job);
 	    response = HttpResponse_createError(HTTP_SERVICEUNAVAILABLE, 0);
+	}
+	else
+	{
+	    PSC_Timer_stop(ctx->timer);
 	}
     }
     if (response)
