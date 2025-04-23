@@ -79,6 +79,9 @@ endif
 ifeq ($(CRED_FILE),1)
 swad_MODULES+=		cred/filechecker
 swad_DEFINES+=		-DCRED_FILE
+swad_INCLUDES+=		-I./include/swadbcrypt
+swad_STATICDEPS+=	swadbcrypt
+swad_LIBS+=		swadbcrypt
 endif
 
 ifeq ($(CRED_PAM),1)
@@ -95,10 +98,6 @@ swad_PKGDEPS+=		$(posercore_PKGDEPS)
 else
 swad_PKGDEPS+=		posercore >= 1.2.3
 endif
-
-swad_INCLUDES+=		-I./include/swadbcrypt
-swad_STATICDEPS+=	swadbcrypt
-swad_LIBS+=		swadbcrypt
 
 ifeq ($(WITH_MAN),1)
 swad_MANSECT=		8

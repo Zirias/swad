@@ -177,13 +177,13 @@ static void prestartup(void *receiver, void *sender, void *args)
 		goto dofail;
 #endif
 
-#if defined(CRED_FILE) || defined(CRED_PAM)
+#if defined(CRED_EXEC) || defined(CRED_FILE) || defined(CRED_PAM)
 	    doregister:
 		Authenticator_registerChecker(CfgChecker_name(c), checker);
 		break;
 #endif
 
-#if !defined(CRED_FILE) || !defined(CRED_PAM)
+#if !defined(CRED_EXEC) || !defined(CRED_FILE) || !defined(CRED_PAM)
 	    dofail:
 		PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s will "
 			"always fail, because swad was built without support "
