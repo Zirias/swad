@@ -23,6 +23,7 @@ typedef struct ExecLoginRequest
     PSC_Process *process;
     PSC_Connection *procStdout;
     PSC_Connection *procStderr;
+    PSC_Timer *timeout;
     const char *pw;
     char *realname;
     int ok;
@@ -57,6 +58,7 @@ static void processDone(void *receiver, void *sender, void *args)
     req->process = 0;
     if (!req->procStdout && !req->procStderr)
     {
+	PSC_Timer_stop(req->timeout);
 	PSC_AsyncTask_complete(req->task, 0);
     }
 }
@@ -73,6 +75,7 @@ static void streamClosed(void *receiver, void *sender, void *args)
 
     if (!req->procStdout && !req->procStderr && !req->process)
     {
+	PSC_Timer_stop(req->timeout);
 	PSC_AsyncTask_complete(req->task, 0);
     }
 }
@@ -118,6 +121,45 @@ static void pwSent(void *receiver, void *sender, void *args)
     PSC_Connection_close(sender, 0);
 }
 
+static void execTimeout(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    ExecLoginRequest *req = receiver;
+    if (req->procStdout)
+    {
+	PSC_Event_unregister(PSC_Connection_dataReceived(req->procStdout), req,
+		receiveStdout, 0);
+	PSC_Event_unregister(PSC_Connection_closed(req->procStdout), req,
+		streamClosed, 0);
+    }
+    if (req->procStderr)
+    {
+	PSC_Event_unregister(PSC_Connection_dataReceived(req->procStderr), req,
+		receiveStderr, 0);
+	PSC_Event_unregister(PSC_Connection_closed(req->procStderr), req,
+		streamClosed, 0);
+    }
+    if (req->process)
+    {
+	PSC_Event_unregister(PSC_Process_done(req->process), req,
+		processDone, 0);
+	PSC_Process_stop(req->process, req->checker->killtimeout);
+    }
+    req->ok = 0;
+    if (req->realname)
+    {
+	free(req->realname);
+	req->realname = 0;
+    }
+    PSC_Log_fmt(PSC_L_WARNING, "execchecker: %s timed out after %d ms, "
+	    "considering login failed.",
+	    req->checker->path, req->checker->timeout);
+
+    PSC_AsyncTask_complete(req->task, 0);
+}
+
 static void setProcStream(void *obj,
 	PSC_StreamType stream, PSC_Connection *conn)
 {
@@ -126,6 +168,7 @@ static void setProcStream(void *obj,
     switch (stream)
     {
 	case PSC_ST_STDIN:
+	    PSC_Timer_start(req->timeout, 0);
 	    PSC_Connection_sendTextAsync(conn, req->pw, 0);
 	    PSC_Connection_sendTextAsync(conn, "\n", req);
 	    PSC_Event_register(PSC_Connection_dataSent(conn), 0, pwSent, 0);
@@ -154,6 +197,7 @@ static void setProcStream(void *obj,
 static void checkAsync(PSC_AsyncTask *task)
 {
     ExecLoginRequest *req = PSC_AsyncTask_arg(task);
+    PSC_Event_register(PSC_Timer_expired(req->timeout), req, execTimeout, 0);
     PSC_Event_register(PSC_Process_done(req->process), req, processDone, 0);
     PSC_Process_exec(req->process, req, setProcStream, req->checker->path);
 }
@@ -175,12 +219,14 @@ static int check(void *obj, const char *user, const char *pw, char **realname)
     req->process = PSC_Process_create(opts);
     req->procStdout = 0;
     req->procStderr = 0;
+    req->timeout = PSC_Timer_create();
     req->pw = pw;
     req->realname = 0;
     req->ok = 0;
 
     PSC_ProcessOpts_destroy(opts);
 
+    PSC_Timer_setMs(req->timeout, self->timeout);
     PSC_AsyncTask_await(req->task, req);
 
     int ok = req->ok;
@@ -189,6 +235,7 @@ static int check(void *obj, const char *user, const char *pw, char **realname)
 	if (ok) *realname = req->realname;
 	else free(req->realname);
     }
+    PSC_Timer_destroy(req->timeout);
     free(req);
     return ok;
 }
