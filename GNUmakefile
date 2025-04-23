@@ -26,7 +26,8 @@ MKCLIDOC_CLEANGOAL=	distclean
 
 DISTCLEANDIRS=		tools/bin
 NODIST=			poser/zimk \
-			tools/mkclidoc/zimk
+			tools/mkclidoc/zimk \
+			$(wildcard poser/src/lib/core/contrib/xxHash/[!x]*)
 
 include zimk/zimk.mk
 
