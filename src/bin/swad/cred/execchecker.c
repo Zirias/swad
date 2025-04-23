@@ -12,6 +12,8 @@ typedef struct ExecChecker
 {
     CredentialsChecker base;
     char *path;
+    int timeout;
+    int killtimeout;
 } ExecChecker;
 
 typedef struct ExecLoginRequest
@@ -191,12 +193,15 @@ static int check(void *obj, const char *user, const char *pw, char **realname)
     return ok;
 }
 
-CredentialsChecker *CredentialsChecker_createExec(const char *path)
+CredentialsChecker *CredentialsChecker_createExec(const char *path,
+	int timeout, int killtimeout)
 {
     ExecChecker *self = PSC_malloc(sizeof *self);
     self->base.check = check;
     self->base.destroy = destroyChecker;
     self->path = PSC_copystr(path);
+    self->timeout = timeout;
+    self->killtimeout = killtimeout;
     return (CredentialsChecker *)self;
 }
 

@@ -24,6 +24,7 @@
 #  include "cred/pamchecker.h"
 #endif
 
+#include <errno.h>
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,6 +55,58 @@ static void setupPipeline(HttpServer *server)
 
     HttpServer_setLogLevelCallback(server, logLevelFor);
 }
+
+#ifdef CRED_EXEC
+static CredentialsChecker *createExecChecker(const CfgChecker *cfg)
+{
+    int timeout = 10000;
+    int killtimeout = 5000;
+    const char *path;
+    long intarg;
+
+    const char *argstr = CfgChecker_arg(cfg, 0);
+    if (!argstr)
+    {
+	PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s will always fail: "
+		"missing argument `path' for `exec'", CfgChecker_name(cfg));
+	return 0;
+    }
+    path = argstr;
+
+    argstr = CfgChecker_arg(cfg, 1);
+    if (argstr)
+    {
+	errno = 0;
+	char *endp;
+	intarg = strtol(argstr, &endp, 10);
+	if (errno == ERANGE || endp == argstr || *endp
+		|| intarg < 500 || intarg > 60000)
+	{
+	    PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s: Invalid "
+		    "timeout value `%s', using default of 10000 ms",
+		    CfgChecker_name(cfg), argstr);
+	}
+	else timeout = intarg;
+
+	argstr = CfgChecker_arg(cfg, 2);
+	if (argstr)
+	{
+	    errno = 0;
+	    intarg = strtol(argstr, &endp, 10);
+	    if (errno == ERANGE || endp == argstr || *endp
+		    || intarg < 500 || intarg > 10000)
+	    {
+		PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s: Invalid "
+			"kill timeout value `%s', using default of 5000 ms",
+			CfgChecker_name(cfg), argstr);
+	    }
+	    else killtimeout = intarg;
+	}
+    }
+
+    return CredentialsChecker_createExec(path, timeout, killtimeout);
+}
+#endif
 
 static void prestartup(void *receiver, void *sender, void *args)
 {
@@ -95,7 +148,8 @@ static void prestartup(void *receiver, void *sender, void *args)
 
 	    case CC_EXEC:
 #ifdef CRED_EXEC
-		checker = CredentialsChecker_createExec(CfgChecker_arg(c, 0));
+		checker = createExecChecker(c);
+		if (!checker) continue;
 		goto doregister;
 #else
 		checkerClassName = "exec";
