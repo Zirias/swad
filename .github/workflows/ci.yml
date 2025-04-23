@@ -10,9 +10,9 @@ jobs:
   build:
     strategy:
       matrix:
-        cred_exec: [on, off]
-        cred_file: [on, off]
-        cred_pam: [on, off]
+        cred_exec: [CRED_EXEC=on, CRED_EXEC=off]
+        cred_file: [CRED_FILE=on, CRED_FILE=off]
+        cred_pam: [CRED_PAM=on, CRED_PAM=off]
     runs-on: ubuntu-latest
     env:
       CI_CFLAGS: -O2 -std=c11 -Wall -Wextra -Wshadow -Werror -pedantic
@@ -25,5 +25,7 @@ jobs:
       run: sudo apt-get -y install ${CI_DEPS}
     - name: make
       run: >-
-        make -j CFLAGS="${CI_CFLAGS}" CRED_EXEC=${{matrix.cred_exec}}
-        CRED_FILE=${{matrix.cred_file}} CRED_PAM=${{matrix.cred_pam}}
+        make -j CFLAGS="${CI_CFLAGS}"
+        ${{matrix.cred_exec}}
+        ${{matrix.cred_file}}
+        ${{matrix.cred_pam}}
