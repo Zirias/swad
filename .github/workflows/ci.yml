@@ -8,6 +8,12 @@ on:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        cred_exec: [on, off]
+        cred_file: [on, off]
+        cred_pam: [on, off]
+        no_epoll: [off, on, on WITH_POSER_POLL=on]
     runs-on: ubuntu-latest
     env:
       CI_CFLAGS: -O2 -std=c11 -Wall -Wextra -Wshadow -Werror -pedantic
@@ -19,4 +25,7 @@ jobs:
     - name: build-depends
       run: sudo apt-get -y install ${CI_DEPS}
     - name: make
-      run: make -j4 CFLAGS="${CI_CFLAGS}"
+      run: >-
+        make -j CFLAGS="${CI_CFLAGS}" CRED_EXEC=${{matrix.cred_exec}}
+        CRED_FILE=${{matrix.cred_file}} CRED_PAM=${{matrix.cred_pam}}
+        WITHOUT_POSER_EPOLL=${{matrix.no_epoll}}
