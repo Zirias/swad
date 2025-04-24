@@ -28,11 +28,11 @@ form {
     <form action="%%SELF%%" method="post" autocomplete="off"
 	  data-challenge="%%CHALLENGE%%" data-difficulty="%%DIFFICULTY%%">
       <input type="hidden" name="%%CSRFNAME%%" value="%%CSRFTOKEN%%">
-      <input type="text" name="user" placeholder="user name" value="%%USER%%"
+      <input type="hidden" name="user" placeholder="user name" value="%%USER%%"
 	  maxlength="32" autofocus><br>
-      <input type="password" name="pw" placeholder="password"
+      <input type="hidden" name="pw" placeholder="password"
 	  maxlength="32"><br>
-      <input type="submit" name="login" value="login">
+      <input type="hidden" name="login" value="login">
     </form>
   </body>
 </html>
