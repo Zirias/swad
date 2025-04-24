@@ -25,7 +25,8 @@ form {
   <body>
     <h1>%%REALM%% Login</h1>
     <p class="error">Calculating ...</p>
-    <form action="%%SELF%%" method="post" autocomplete="off">
+    <form action="%%SELF%%" method="post" autocomplete="off"
+	  data-challenge="%%CHALLENGE%%" data-difficulty="%%DIFFICULTY%%">
       <input type="hidden" name="%%CSRFNAME%%" value="%%CSRFTOKEN%%">
       <input type="text" name="user" placeholder="user name" value="%%USER%%"
 	  maxlength="32" autofocus><br>

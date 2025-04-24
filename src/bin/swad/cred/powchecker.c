@@ -4,11 +4,16 @@
 #include "../http/httpcontext.h"
 #include "../http/httpresponse.h"
 #include "../mediatype.h"
+#include "../middleware/csrfprotect.h"
 #include "../middleware/pathparser.h"
+#include "../middleware/session.h"
 #include "../template.h"
 #include "../tmpl.h"
 
+#include <openssl/sha.h>
+#include <poser/core/random.h>
 #include <poser/core/util.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -22,14 +27,28 @@ typedef struct PowChecker
 
 static void deviate(void *obj, const Authenticator *auth, HttpContext *context)
 {
-    (void)obj;
-    (void)auth;
+    PowChecker *self = obj;
 
     const PathParser *pathParser = PathParser_get(context);
     if (!pathParser) return;
+    const char *csrfToken = CSRFProtect_token(context);
+    if (!csrfToken) return;
+
+    char *challenge = PSC_Random_createStr(32, PSC_RF_NONBLOCK);
+    Session_setProp(Authenticator_session(auth), "_POW_CHALLENGE",
+	    challenge, free);
+
+    char difficulty[8];
+    snprintf(difficulty, sizeof difficulty, "%u", self->difficulty);
 
     Template *tmpl = Template_createStatic(tmpl_pow_html, tmpl_pow_html_sz);
+    Template_setStaticVar(tmpl, "REALM", Authenticator_realm(auth), TF_HTML);
     Template_setStaticVar(tmpl, "SELF", PathParser_path(pathParser), TF_NONE);
+    Template_setStaticVar(tmpl, "CSRFNAME", CSRFProtect_name(), TF_NONE);
+    Template_setStaticVar(tmpl, "CSRFTOKEN", csrfToken, TF_NONE);
+    Template_setStaticVar(tmpl, "USER", self->user, TF_HTML);
+    Template_setStaticVar(tmpl, "CHALLENGE", challenge, TF_NONE);
+    Template_setStaticVar(tmpl, "DIFFICULTY", difficulty, TF_NONE);
     HttpResponse *response = HttpResponse_create(HTTP_OK, MT_HTML);
     HttpResponse_passTextBody(response, Template_process(tmpl));
     Template_destroy(tmpl);
@@ -47,7 +66,20 @@ static AuthResult check(void *obj, const char *user, const char *pw,
     if (!strcmp(user, self->user))
     {
 	if (!strcmp(pw, self->password)) return AR_DEVIATE;
-	return AR_FAILED;
+	const char *challenge = Session_getProp(Authenticator_session(auth),
+		"_POW_CHALLENGE");
+	if (!challenge) return AR_FAILED;
+	char tohash[128];
+	int tohashlen = snprintf(tohash, sizeof tohash, "%s%s", challenge, pw);
+	Session_setProp(Authenticator_session(auth), "_POW_CHALLENGE", 0, 0);
+	unsigned char hash[SHA256_DIGEST_LENGTH];
+	SHA256((const unsigned char *)tohash, tohashlen, hash);
+	for (unsigned i = 0; i < self->difficulty; ++i)
+	{
+	    unsigned char nibble = (hash[i/2] >> 4 * !(i % 2)) & 0xf;
+	    if (nibble != 0) return AR_FAILED;
+	}
+	return AR_OK;
     }
     return AR_FAILED;
 }

@@ -98,6 +98,19 @@ swad_MODULES+=		cred/powchecker \
 swad_DEFINES+=		-DCRED_POW
 swad_SFILES+=		pow.mjs
 swad_TMPL+=		pow
+  ifneq ($(OPENSSLINC)$(OPENSSLLIB),)
+    ifeq ($(OPENSSLINC),)
+$(error OPENSSLLIB specified without OPENSSLINC)
+    endif
+    ifeq ($(OPENSSLLIB),)
+$(error OPENSSLINC specified without OPENSSLLIB)
+    endif
+swad_INCLUDES+=		-I$(OPENSSLINC)
+swad_LDFLAGS+=		-L$(OPENSSLLIB)
+swad_LIBS+=		crypto
+  else
+swad_PKGDEPS+=		libcrypto
+  endif
 endif
 
 ifeq ($(BUNDLED_POSER),1)
