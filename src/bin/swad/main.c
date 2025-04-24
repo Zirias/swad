@@ -116,6 +116,43 @@ static CredentialsChecker *createExecChecker(const CfgChecker *cfg)
 }
 #endif
 
+#ifdef CRED_POW
+static CredentialsChecker *createPowChecker(const CfgChecker *cfg)
+{
+    unsigned difficulty = 5;
+    const char *user = "guest";
+    const char *password = "guest";
+
+    const char *argstr = CfgChecker_arg(cfg, 0);
+    if (argstr)
+    {
+	char *endp;
+	errno = 0;
+	long intarg = strtol(argstr, &endp, 10);
+	if (errno == ERANGE || endp == argstr || *endp
+		|| intarg < 2 || intarg > 20)
+	{
+	    PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s: Invalid "
+		    "difficulty value `%s', using default of 5",
+		    CfgChecker_name(cfg), argstr);
+	}
+	else difficulty = intarg;
+
+	argstr = CfgChecker_arg(cfg, 1);
+	if (argstr)
+	{
+	    user = argstr;
+	    password = argstr;
+
+	    argstr = CfgChecker_arg(cfg, 2);
+	    if (argstr) password = argstr;
+	}
+    }
+
+    return CredentialsChecker_createPow(difficulty, user, password);
+}
+#endif
+
 static void prestartup(void *receiver, void *sender, void *args)
 {
     (void)receiver;
@@ -189,7 +226,7 @@ static void prestartup(void *receiver, void *sender, void *args)
 
 	    case CC_POW:
 #ifdef CRED_POW
-		checker = CredentialsChecker_createPow();
+		checker = createPowChecker(c);
 		goto doregister;
 #else
 		checkerClassName = "pow";
