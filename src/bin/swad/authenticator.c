@@ -194,7 +194,7 @@ AuthResult Authenticator_silentLogin(Authenticator *self)
     PSC_HashTableIterator *i = 0;
     PSC_ListIterator *j = 0;
     AuthInfo *authInfo = getAuthInfo(self, 0);
-    if (!authInfo || authInfo->user) goto done;
+    if (authInfo && authInfo->user) goto done;
     j = PSC_List_iterator(self->realm->checkers);
     for (i = PSC_HashTable_iterator(self->authInfos);
 	    PSC_HashTableIterator_moveNext(i); )
@@ -205,6 +205,7 @@ AuthResult Authenticator_silentLogin(Authenticator *self)
 	{
 	    if (strcmp(otherInfo->user->checker,
 			PSC_ListIterator_current(j))) continue;
+	    if (!authInfo) authInfo = getAuthInfo(self, 1);
 	    authInfo->user = copyUser(otherInfo->user);
 	    goto done;
 	}
