@@ -25,10 +25,12 @@ typedef enum AuthResult
 struct CredentialsChecker
 {
     AuthResult (*check)(void *self, const char *user, const char *pw,
-	    char **realname)
-	CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3)) ATTR_NONNULL((4));
-    void (*deviate)(void *self, HttpContext *context)
-	CMETHOD ATTR_NONNULL((1));
+	    const Authenticator *auth, char **realname)
+	CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3))
+	ATTR_NONNULL((4)) ATTR_NONNULL((5));
+    void (*deviate)(void *self, const Authenticator *auth,
+	    HttpContext *context)
+	CMETHOD ATTR_NONNULL((1)) ATTR_NONNULL((2));
     void (*destroy)(void *self);
 };
 
@@ -36,6 +38,8 @@ Authenticator *Authenticator_create(Session *session, const char *realm)
     ATTR_RETNONNULL;
 const User *Authenticator_user(const Authenticator *self) CMETHOD;
 const char *Authenticator_realm(const Authenticator *self) CMETHOD;
+Session *Authenticator_session(const Authenticator *self)
+    CMETHOD ATTR_RETNONNULL;
 AuthResult Authenticator_silentLogin(Authenticator *self) CMETHOD;
 AuthResult Authenticator_login(Authenticator *self,
 	const char *user, const char *pw)

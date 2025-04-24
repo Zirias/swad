@@ -162,8 +162,10 @@ static void checkAsync(PSC_AsyncTask *task)
 }
 
 static AuthResult check(void *obj, const char *user, const char *pw,
-	char **realname)
+	const Authenticator *auth, char **realname)
 {
+    (void)auth;
+
     *realname = 0;
     PamChecker *self = obj;
     pthread_mutex_lock(&pamLock);

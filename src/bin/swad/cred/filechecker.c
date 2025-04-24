@@ -18,8 +18,10 @@ typedef struct FileChecker
 } FileChecker;
 
 static AuthResult check(void *obj, const char *user, const char *pw,
-	char **realname)
+	const Authenticator *auth, char **realname)
 {
+    (void)auth;
+
     char buf[512];
     int ok = 0;
 

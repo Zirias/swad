@@ -19,6 +19,7 @@ typedef struct AuthInfo
 
 struct Authenticator
 {
+    Session *session;
     PSC_HashTable *authInfos;
     const char *realm;
     CredentialsChecker *deviate;
@@ -112,6 +113,7 @@ static PSC_HashTable *getAuthInfos(Session *session)
 Authenticator *Authenticator_create(Session *session, const char *realm)
 {
     Authenticator *self = PSC_malloc(sizeof *self);
+    self->session = session;
     self->authInfos = getAuthInfos(session);
     self->realm = realm ? realm : DEFAULT_REALM;
     self->deviate = 0;
@@ -143,6 +145,11 @@ const User *Authenticator_user(const Authenticator *self)
 const char *Authenticator_realm(const Authenticator *self)
 {
     return self->realm;
+}
+
+Session *Authenticator_session(const Authenticator *self)
+{
+    return self->session;
 }
 
 AuthResult Authenticator_silentLogin(Authenticator *self)
@@ -231,7 +238,7 @@ AuthResult Authenticator_login(Authenticator *self,
 	if (checker)
 	{
 	    char *realname = 0;
-	    result = checker->check(checker, user, pw, &realname);
+	    result = checker->check(checker, user, pw, self, &realname);
 	    if (result == AR_OK || result == AR_DEVIATE)
 	    {
 		if (!authInfo) authInfo = getAuthInfo(self, 1);
@@ -270,7 +277,7 @@ done:
 int Authenticator_deviate(Authenticator *self, HttpContext *context)
 {
     if (!self->deviate || !self->deviate->deviate) return -1;
-    self->deviate->deviate(self->deviate, context);
+    self->deviate->deviate(self->deviate, self, context);
     return 0;
 }
 

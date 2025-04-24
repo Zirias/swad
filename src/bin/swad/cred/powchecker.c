@@ -20,9 +20,10 @@ typedef struct PowChecker
     unsigned difficulty;
 } PowChecker;
 
-static void deviate(void *obj, HttpContext *context)
+static void deviate(void *obj, const Authenticator *auth, HttpContext *context)
 {
     (void)obj;
+    (void)auth;
 
     const PathParser *pathParser = PathParser_get(context);
     if (!pathParser) return;
@@ -36,8 +37,10 @@ static void deviate(void *obj, HttpContext *context)
 }
 
 static AuthResult check(void *obj, const char *user, const char *pw,
-	char **realname)
+	const Authenticator *auth, char **realname)
 {
+    (void)auth;
+
     PowChecker *self = obj;
     *realname = 0;
 
