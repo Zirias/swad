@@ -1,9 +1,16 @@
 #include "powchecker.h"
 
 #include "../authenticator.h"
+#include "../http/httpcontext.h"
+#include "../http/httpresponse.h"
+#include "../mediatype.h"
+#include "../middleware/pathparser.h"
+#include "../template.h"
+#include "../tmpl.h"
 
 #include <poser/core/util.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct PowChecker
 {
@@ -13,14 +20,32 @@ typedef struct PowChecker
     unsigned difficulty;
 } PowChecker;
 
+static void deviate(void *obj, HttpContext *context)
+{
+    (void)obj;
+
+    const PathParser *pathParser = PathParser_get(context);
+    if (!pathParser) return;
+
+    Template *tmpl = Template_createStatic(tmpl_pow_html, tmpl_pow_html_sz);
+    Template_setStaticVar(tmpl, "SELF", PathParser_path(pathParser), TF_NONE);
+    HttpResponse *response = HttpResponse_create(HTTP_OK, MT_HTML);
+    HttpResponse_passTextBody(response, Template_process(tmpl));
+    Template_destroy(tmpl);
+    HttpContext_setResponse(context, response);
+}
+
 static AuthResult check(void *obj, const char *user, const char *pw,
 	char **realname)
 {
-    (void)obj;
-    (void)user;
-    (void)pw;
-    (void)realname;
+    PowChecker *self = obj;
+    *realname = 0;
 
+    if (!strcmp(user, self->user))
+    {
+	if (!strcmp(pw, self->password)) return AR_DEVIATE;
+	return AR_FAILED;
+    }
     return AR_FAILED;
 }
 
@@ -37,7 +62,7 @@ CredentialsChecker *CredentialsChecker_createPow(unsigned difficulty,
 {
     PowChecker *self = PSC_malloc(sizeof *self);
     self->base.check = check;
-    self->base.deviate = 0;
+    self->base.deviate = deviate;
     self->base.destroy = destroyChecker;
     self->user = PSC_copystr(user);
     self->password = PSC_copystr(password);

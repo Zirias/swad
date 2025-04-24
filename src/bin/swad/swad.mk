@@ -97,6 +97,7 @@ swad_MODULES+=		cred/powchecker \
 			staticfiles
 swad_DEFINES+=		-DCRED_POW
 swad_SFILES+=		pow.mjs
+swad_TMPL+=		pow
 endif
 
 ifeq ($(BUNDLED_POSER),1)

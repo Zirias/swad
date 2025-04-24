@@ -24,4 +24,16 @@ const size_t tmpl_logout_html_sz = sizeof
 #include "tmpl/logout.html.h"
 - 1;
 
+#ifdef CRED_POW
+static const unsigned char tmpl_pow_html_a[sizeof
+#include "tmpl/pow.html.h"
+- 1] =
+#include "tmpl/pow.html.h"
+;
+const unsigned char *tmpl_pow_html = tmpl_pow_html_a;
+const size_t tmpl_pow_html_sz = sizeof
+#include "tmpl/pow.html.h"
+- 1;
+#endif
+
 ENDSUPPRESS

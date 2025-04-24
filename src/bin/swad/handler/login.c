@@ -69,6 +69,12 @@ static void doLogin(HttpContext *context, Session *session)
 	    PSC_Log_fmt(PSC_L_INFO, "login: %s logged in for %s",
 		    user, realm);
 	}
+	else if (result == AR_DEVIATE)
+	{
+	    Authenticator_deviate(auth, context);
+	    Authenticator_destroy(auth);
+	    return;
+	}
 	else
 	{
 	    Session_setProp(session, SK_AREALM, PSC_copystr(realm), free);
