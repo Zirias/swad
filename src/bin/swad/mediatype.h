@@ -16,6 +16,7 @@ typedef enum MediaType
     MT_TEXT	= (MC_TEXT<<8) | 1,
     MT_HTML	= (MC_TEXT<<8) | 2,
     MT_CSS	= (MC_TEXT<<8) | 3,
+    MT_JS	= (MC_TEXT<<8) | 4,
     MT_PNG	= (MC_IMAGE<<8) | 1,
     MT_GIF	= (MC_IMAGE<<8) | 2
 } MediaType;
