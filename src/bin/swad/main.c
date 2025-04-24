@@ -256,7 +256,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     const CfgRealm *r;
     for (size_t i = 0; (r = Config_realm(i)); ++i)
     {
-	Realm *realm = Realm_create(CfgRealm_name(r));
+	Realm *realm = Realm_create(CfgRealm_name(r), SYSCONFDIR "/swad");
 	const char *cname;
 	for (size_t j = 0; (cname = CfgRealm_checker(r, j)); ++j)
 	{

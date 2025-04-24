@@ -12,7 +12,6 @@
 #include "../middleware/pathparser.h"
 #include "../middleware/session.h"
 #include "../template.h"
-#include "../tmpl.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -131,6 +130,10 @@ static void showForm(HttpContext *context, Session *session,
 		HttpResponse_createRedirect(HTTP_OK, rdr));
 	return;
     }
+    const uint8_t *tdata;
+    size_t tsz;
+    if (user) tdata = Authenticator_logoutTmpl(auth, &tsz);
+    else tdata = Authenticator_loginTmpl(auth, &tsz);
     Authenticator_destroy(auth);
 
     const char *csrfToken = CSRFProtect_token(context);
@@ -141,10 +144,9 @@ static void showForm(HttpContext *context, Session *session,
 	return;
     }
 
-    Template *tmpl = 0;
+    Template *tmpl = Template_createStatic(tdata, tsz);
     if (user)
     {
-	tmpl = Template_createStatic(tmpl_logout_html, tmpl_logout_html_sz);
 	const char *username = User_username(user);
 	const char *realname = User_realname(user);
 	if (!realname || !*realname) realname = "<Unknown name>";
@@ -153,7 +155,6 @@ static void showForm(HttpContext *context, Session *session,
     }
     else
     {
-	tmpl = Template_createStatic(tmpl_login_html, tmpl_login_html_sz);
 	const char *le = Session_getProp(session, SK_ERROR);
 	if (le) Template_setStaticVar(tmpl, "ERRMSG", le, TF_HTML);
 	const char *lu = Session_getProp(session, SK_USER);

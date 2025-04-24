@@ -2,6 +2,7 @@
 #define SWAD_AUTHENTICATOR_H
 
 #include <poser/decl.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define DEFAULT_REALM "SWAD"
@@ -38,6 +39,10 @@ Authenticator *Authenticator_create(Session *session, const char *realm)
     ATTR_RETNONNULL;
 const User *Authenticator_user(const Authenticator *self) CMETHOD;
 const char *Authenticator_realm(const Authenticator *self) CMETHOD;
+const uint8_t *Authenticator_loginTmpl(const Authenticator *self, size_t *sz)
+    CMETHOD ATTR_NONNULL((2));
+const uint8_t *Authenticator_logoutTmpl(const Authenticator *self, size_t *sz)
+    CMETHOD ATTR_NONNULL((2));
 Session *Authenticator_session(const Authenticator *self)
     CMETHOD ATTR_RETNONNULL;
 AuthResult Authenticator_silentLogin(Authenticator *self) CMETHOD;
@@ -52,7 +57,8 @@ void Authenticator_destroy(Authenticator *self);
 const char *User_username(const User *self) CMETHOD ATTR_RETNONNULL;
 const char *User_realname(const User *self) CMETHOD;
 
-Realm *Realm_create(const char *name) ATTR_NONNULL((1));
+Realm *Realm_create(const char *name, const char *tmplPath)
+    ATTR_NONNULL((1)) ATTR_NONNULL((2));
 void Realm_addChecker(Realm *self, const char *checker)
     CMETHOD ATTR_NONNULL((1));
 void Realm_addLimit(Realm *self, uint16_t seconds, uint16_t limit) CMETHOD;
