@@ -161,7 +161,8 @@ static void checkAsync(PSC_AsyncTask *task)
     PSC_Connection_sendTextAsync(pamStdin, req.qualifiedUser, 0);
 }
 
-static int check(void *obj, const char *user, const char *pw, char **realname)
+static AuthResult check(void *obj, const char *user, const char *pw,
+	char **realname)
 {
     *realname = 0;
     PamChecker *self = obj;
@@ -172,7 +173,7 @@ static int check(void *obj, const char *user, const char *pw, char **realname)
 	PSC_Log_msg(PSC_L_ERROR,
 		"pamchecker: Authentication is unavailable because the "
 		"helper process died. Restarting swad is advised.");
-	return 0;
+	return AR_FAILED;
     }
 
     req.ok = 0;
@@ -218,7 +219,7 @@ static int check(void *obj, const char *user, const char *pw, char **realname)
 	    else *realname = PSC_copystr(pwd->pw_gecos);
 	}
     }
-    return ok;
+    return ok ? AR_OK : AR_FAILED;
 }
 
 CredentialsChecker *CredentialsChecker_createPam(const char *service)
@@ -226,6 +227,7 @@ CredentialsChecker *CredentialsChecker_createPam(const char *service)
     createProcess();
     PamChecker *self = PSC_malloc(sizeof *self);
     self->base.check = check;
+    self->base.deviate = 0;
     self->base.destroy = destroyChecker;
     self->service = PSC_copystr(service);
     return (CredentialsChecker *)self;

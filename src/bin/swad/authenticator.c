@@ -21,6 +21,7 @@ struct Authenticator
 {
     PSC_HashTable *authInfos;
     const char *realm;
+    CredentialsChecker *deviate;
 };
 
 struct User
@@ -113,6 +114,7 @@ Authenticator *Authenticator_create(Session *session, const char *realm)
     Authenticator *self = PSC_malloc(sizeof *self);
     self->authInfos = getAuthInfos(session);
     self->realm = realm ? realm : DEFAULT_REALM;
+    self->deviate = 0;
     return self;
 }
 
@@ -143,7 +145,7 @@ const char *Authenticator_realm(const Authenticator *self)
     return self->realm;
 }
 
-int Authenticator_silentLogin(Authenticator *self)
+AuthResult Authenticator_silentLogin(Authenticator *self)
 {
     pthread_mutex_lock(&authlock);
     pthread_mutex_lock(&realmlock);
@@ -170,10 +172,10 @@ int Authenticator_silentLogin(Authenticator *self)
 done:
     PSC_HashTableIterator_destroy(i);
     PSC_ListIterator_destroy(j);
-    int ok = authInfo && authInfo->user;
+    AuthResult result = authInfo && authInfo->user ? AR_OK : AR_FAILED;
     pthread_mutex_unlock(&realmlock);
     pthread_mutex_unlock(&authlock);
-    return ok;
+    return result;
 }
 
 static RateLimit *getLimits(Authenticator *self, Realm *realm)
@@ -196,9 +198,11 @@ static RateLimit *getLimits(Authenticator *self, Realm *realm)
     return authInfo->failLimit;
 }
 
-int Authenticator_login(Authenticator *self, const char *user, const char *pw)
+AuthResult Authenticator_login(Authenticator *self,
+	const char *user, const char *pw)
 {
-    int ok = 0;
+    AuthResult result = AR_FAILED;
+    self->deviate = 0;
     pthread_mutex_lock(&authlock);
     pthread_mutex_lock(&realmlock);
     Realm *realm = PSC_HashTable_get(realms, self->realm);
@@ -213,12 +217,12 @@ int Authenticator_login(Authenticator *self, const char *user, const char *pw)
 	}
 	else
 	{
-	    ok = -1;
+	    result = AR_BLOCKED;
 	    goto done;
 	}
     }
     PSC_ListIterator *i = PSC_List_iterator(realm->checkers);
-    while (!ok && PSC_ListIterator_moveNext(i))
+    while (result == AR_FAILED && PSC_ListIterator_moveNext(i))
     {
 	const char *checkerName = PSC_ListIterator_current(i);
 	pthread_mutex_lock(&checkerlock);
@@ -227,22 +231,29 @@ int Authenticator_login(Authenticator *self, const char *user, const char *pw)
 	if (checker)
 	{
 	    char *realname = 0;
-	    if (checker->check(checker, user, pw, &realname))
+	    result = checker->check(checker, user, pw, &realname);
+	    if (result == AR_OK || result == AR_DEVIATE)
 	    {
 		if (!authInfo) authInfo = getAuthInfo(self, 1);
 		deleteUser(authInfo->user);
-		authInfo->user = createUser(user, realname, checkerName);
-		ok = 1;
+		if (result == AR_OK)
+		{
+		    authInfo->user = createUser(user, realname, checkerName);
+		}
+		else
+		{
+		    self->deviate = checker;
+		}
 	    }
 	}
     }
     PSC_ListIterator_destroy(i);
 
-    if (!ok)
+    if (result == AR_FAILED)
     {
 	if (!RateLimit_check(getLimits(self, realm), user))
 	{
-	    ok = -1;
+	    result = AR_BLOCKED;
 	    if (!authInfo) authInfo = getAuthInfo(self, 1);
 	    if (!authInfo->blocks) authInfo->blocks = PSC_HashTable_create(4);
 	    PSC_HashTable_set(authInfo->blocks, user, (void *)1, 0);
@@ -253,7 +264,14 @@ done:
     pthread_mutex_unlock(&realmlock);
     pthread_mutex_unlock(&authlock);
 
-    return ok;
+    return result;
+}
+
+int Authenticator_deviate(Authenticator *self, HttpContext *context)
+{
+    if (!self->deviate || !self->deviate->deviate) return -1;
+    self->deviate->deviate(self->deviate, context);
+    return 0;
 }
 
 void Authenticator_logout(Authenticator *self)

@@ -17,7 +17,8 @@ typedef struct FileChecker
     char *path;
 } FileChecker;
 
-static int check(void *obj, const char *user, const char *pw, char **realname)
+static AuthResult check(void *obj, const char *user, const char *pw,
+	char **realname)
 {
     char buf[512];
     int ok = 0;
@@ -62,7 +63,7 @@ static int check(void *obj, const char *user, const char *pw, char **realname)
 		self->path);
     }
 
-    return ok;
+    return ok ? AR_OK : AR_FAILED;
 }
 
 static void destroyChecker(void *obj)
@@ -76,6 +77,7 @@ CredentialsChecker *CredentialsChecker_createFile(const char *path)
 {
     FileChecker *self = PSC_malloc(sizeof *self);
     self->base.check = check;
+    self->base.deviate = 0;
     self->base.destroy = destroyChecker;
     self->path = PSC_copystr(path);
     return (CredentialsChecker *)self;

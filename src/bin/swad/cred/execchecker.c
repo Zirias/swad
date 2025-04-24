@@ -202,7 +202,8 @@ static void checkAsync(PSC_AsyncTask *task)
     PSC_Process_exec(req->process, req, setProcStream, req->checker->path);
 }
 
-static int check(void *obj, const char *user, const char *pw, char **realname)
+static AuthResult check(void *obj, const char *user, const char *pw,
+	char **realname)
 {
     *realname = 0;
     ExecChecker *self = obj;
@@ -237,7 +238,7 @@ static int check(void *obj, const char *user, const char *pw, char **realname)
     }
     PSC_Timer_destroy(req->timeout);
     free(req);
-    return ok;
+    return ok ? AR_OK : AR_FAILED;
 }
 
 CredentialsChecker *CredentialsChecker_createExec(const char *path,
@@ -245,6 +246,7 @@ CredentialsChecker *CredentialsChecker_createExec(const char *path,
 {
     ExecChecker *self = PSC_malloc(sizeof *self);
     self->base.check = check;
+    self->base.deviate = 0;
     self->base.destroy = destroyChecker;
     self->path = PSC_copystr(path);
     self->timeout = timeout;

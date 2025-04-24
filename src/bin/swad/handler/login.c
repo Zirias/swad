@@ -59,9 +59,9 @@ static void doLogin(HttpContext *context, Session *session)
 	if (!authrdr) authrdr = "/";
 
 	Authenticator *auth = Authenticator_create(session, realm);
-	int ok = Authenticator_login(auth, user, pw);
+	AuthResult result = Authenticator_login(auth, user, pw);
 	FormData_wipe(form, "pw");
-	if (ok > 0)
+	if (result == AR_OK)
 	{
 	    status = HTTP_OK;
 	    rdr = authrdr;
@@ -73,7 +73,7 @@ static void doLogin(HttpContext *context, Session *session)
 	{
 	    Session_setProp(session, SK_AREALM, PSC_copystr(realm), free);
 	    Session_setProp(session, SK_ARDR, PSC_copystr(authrdr), free);
-	    if (ok < 0)
+	    if (result == AR_BLOCKED)
 	    {
 		Session_setProp(session, SK_ERROR,
 			"Too many failed attempts, try again later", 0);
@@ -112,7 +112,7 @@ static void showForm(HttpContext *context, Session *session,
 {
     Authenticator *auth = Authenticator_create(session, realm);
     const User *user = Authenticator_user(auth);
-    if (!user && Authenticator_silentLogin(auth))
+    if (!user && Authenticator_silentLogin(auth) == AR_OK)
     {
 	user = Authenticator_user(auth);
 	Authenticator_destroy(auth);
