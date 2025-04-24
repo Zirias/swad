@@ -57,10 +57,12 @@ swad_DEFINES=		-DLIBEXECDIR=\"$(libexecdir)\" \
 			-DVERSION=\"$(swad_VERSION)\"
 swad_LDFLAGS=		-pthread
 swad_PKGDEPS=		zlib
+swad_SFILES=		#
 swad_TMPL=		login \
 			logout
 swad_GEN=		BIN2CSTR CHELP
-swad_BIN2CSTR_FILES=	$(foreach l,$(swad_TMPL),tmpl/$l.html.h:tmpl/$l.html)
+swad_BIN2CSTR_FILES=	$(foreach s,$(swad_SFILES),static/$s.h:static/$s) \
+			$(foreach l,$(swad_TMPL),tmpl/$l.html.h:tmpl/$l.html)
 swad_CHELP_FILES=	help.h:swad.cdoc
 swad_SUB_FILES=		swad.cdoc \
 			swad.conf.sample
@@ -87,6 +89,14 @@ endif
 ifeq ($(CRED_PAM),1)
 swad_MODULES+=		cred/pamchecker
 swad_DEFINES+=		-DCRED_PAM
+endif
+
+ifeq ($(CRED_POW),1)
+swad_MODULES+=		cred/powchecker \
+			handler/static \
+			staticfiles
+swad_DEFINES+=		-DCRED_POW
+swad_SFILES+=		pow.mjs
 endif
 
 ifeq ($(BUNDLED_POSER),1)

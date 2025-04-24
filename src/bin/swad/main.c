@@ -24,6 +24,11 @@
 #  include "cred/pamchecker.h"
 #endif
 
+#ifdef CRED_POW
+#  include "handler/static.h"
+#  include "cred/powchecker.h"
+#endif
+
 #include <errno.h>
 #include <poser/core.h>
 #include <stdlib.h>
@@ -50,6 +55,9 @@ static void setupPipeline(HttpServer *server)
     HttpServer_addMiddleware(server, MW_FormData);
     HttpServer_addMiddleware(server, MW_CSRFProtect);
 
+#ifdef CRED_POW
+    HttpServer_addRoute(server, "/login/static", staticHandler, HTTP_GET, 0);
+#endif
     HttpServer_addRoute(server, "/login", loginHandler, HTTP_GET|HTTP_POST, 0);
     HttpServer_addRoute(server, "/", rootHandler, HTTP_GET, 0);
 
@@ -132,10 +140,12 @@ static void prestartup(void *receiver, void *sender, void *args)
     Authenticator_init();
 
     const CfgChecker *c;
-#if defined(CRED_EXEC) || defined(CRED_FILE) || defined(CRED_PAM)
+#if defined(CRED_EXEC) || defined(CRED_FILE) \
+    || defined(CRED_PAM) || defined(CRED_POW)
     CredentialsChecker *checker;
 #endif
-#if !defined(CRED_EXEC) || !defined(CRED_FILE) || !defined(CRED_PAM)
+#if !defined(CRED_EXEC) || !defined(CRED_FILE) \
+    || !defined(CRED_PAM) || !defined(CRED_POW)
     const char *checkerClassName;
     const char *checkerBuildOpt;
 #endif
@@ -177,13 +187,25 @@ static void prestartup(void *receiver, void *sender, void *args)
 		goto dofail;
 #endif
 
-#if defined(CRED_EXEC) || defined(CRED_FILE) || defined(CRED_PAM)
+	    case CC_POW:
+#ifdef CRED_POW
+		checker = CredentialsChecker_createPow();
+		goto doregister;
+#else
+		checkerClassName = "pow";
+		checkerBuildOpt = "CRED_POW";
+		goto dofail;
+#endif
+
+#if defined(CRED_EXEC) || defined(CRED_FILE) \
+    || defined(CRED_PAM) || defined(CRED_POW)
 	    doregister:
 		Authenticator_registerChecker(CfgChecker_name(c), checker);
 		break;
 #endif
 
-#if !defined(CRED_EXEC) || !defined(CRED_FILE) || !defined(CRED_PAM)
+#if !defined(CRED_EXEC) || !defined(CRED_FILE) \
+    || !defined(CRED_PAM) || !defined(CRED_POW)
 	    dofail:
 		PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s will "
 			"always fail, because swad was built without support "

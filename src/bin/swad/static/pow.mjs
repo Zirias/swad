@@ -1,0 +1,3 @@
+(async () => {
+    window.alert("dummy!");
+})();

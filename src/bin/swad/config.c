@@ -245,6 +245,7 @@ static void readChecker(char *lp)
     if (!strcmp(classname, "exec")) checker->class = CC_EXEC;
     else if (!strcmp(classname, "file")) checker->class = CC_FILE;
     else if (!strcmp(classname, "pam")) checker->class = CC_PAM;
+    else if (!strcmp(classname, "pow")) checker->class = CC_POW;
     else
     {
 	PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown credentials "

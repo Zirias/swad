@@ -18,7 +18,8 @@ typedef enum CheckerClass
     CC_NONE,
     CC_EXEC,
     CC_FILE,
-    CC_PAM
+    CC_PAM,
+    CC_POW
 } CheckerClass;
 
 int Config_init(int argc, char **argv) ATTR_NONNULL((2));
