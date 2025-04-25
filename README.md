@@ -185,6 +185,7 @@ Dependencies:
 * A C compiler understanding GNU commandline options and the C11 standard
   (GNU GCC and LLVM clang work fine)
 * GNU make
+* zlib
 * OpenSSL, or a compatible implementation like LibreSSL, when building with
   bundled poser and TLS enabled, or when building with the POW credentials
   checker
