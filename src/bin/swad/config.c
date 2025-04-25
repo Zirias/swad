@@ -77,6 +77,8 @@ static PSC_IpAddr *nat64Prefix;
 static const char *cfgfile;
 static char *cfg_pidfile;
 static const char *pidfile;
+static char *loginRoute;
+static char *staticRoute;
 static long uid = -1;
 static long gid = -1;
 static int resolveHosts = -1;
@@ -517,6 +519,18 @@ static void readOption(char *lp)
 	if (limitsArg(loginSeconds + nloginLimits,
 		    loginLimits + nloginLimits, value) < 0) goto inval;
 	++nloginLimits;
+	return;
+    }
+    if (!strcmp(key, "login_route"))
+    {
+	free(loginRoute);
+	free(staticRoute);
+	size_t routelen = strlen(value);
+	loginRoute = PSC_malloc(routelen + 1);
+	memcpy(loginRoute, value, routelen + 1);
+	staticRoute = PSC_malloc(routelen + sizeof "/static");
+	memcpy(staticRoute, value, routelen);
+	memcpy(staticRoute+routelen, "/static", sizeof "/static");
 	return;
     }
 
@@ -963,6 +977,18 @@ int Config_loginFailLimit(size_t num, uint16_t *seconds, uint16_t *limit)
     return 1;
 }
 
+const char *Config_loginRoute(void)
+{
+    if (!loginRoute) return "/login";
+    return loginRoute;
+}
+
+const char *Config_staticRoute(void)
+{
+    if (!staticRoute) return "/login/static";
+    return staticRoute;
+}
+
 void Config_done(void)
 {
     for (size_t i = 0; i < realms_count; ++i)
@@ -1003,8 +1029,9 @@ void Config_done(void)
 	free(s);
     }
     free(servers);
-
     free(cfg_pidfile);
+    free(staticRoute);
+    free(loginRoute);
 
     PSC_IpAddr_destroy(nat64Prefix);
 
@@ -1027,5 +1054,7 @@ void Config_done(void)
     verbose = 0;
     nsessionLimits = 0;
     nloginLimits = 0;
+    loginRoute = 0;
+    staticRoute = 0;
 }
 

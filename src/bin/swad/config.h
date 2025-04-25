@@ -57,6 +57,8 @@ int Config_foreground(void);
 int Config_verbose(void);
 int Config_sessionLimit(size_t num, uint16_t *seconds, uint16_t *limit);
 int Config_loginFailLimit(size_t num, uint16_t *seconds, uint16_t *limit);
+const char *Config_loginRoute(void) ATTR_RETNONNULL;
+const char *Config_staticRoute(void) ATTR_RETNONNULL;
 
 void Config_done(void);
 

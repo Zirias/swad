@@ -56,9 +56,7 @@ accepts them for rendering the login form.
 
 ### Endpoint details
 
-* `/`, method `GET`: Check current authentication. Accepts an additional
-  parameter for the route to the login endpoint in the custom header
-  `X-SWAD-login`. If missing, a default of `/login` is used.
+* `/`, method `GET`: Check current authentication.
   - response `200`: Returned if the user is authenticated for the given realm.
     Returns a `text/plain` document containing the user name and, if
     available, the user's real name in a second line.
@@ -109,7 +107,7 @@ location /secret {
 }
 
 location = /login {
-    proxy_pass https://swad.example.com:8443;
+    proxy_pass https://swad.example.com:8443/login;
     proxy_http_version 1.1;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 }
@@ -127,10 +125,11 @@ location = /auth {
 ```
 
 Note the `proxy_pass` for `/auth` uses a trailing slash, so the proxied
-request always goes to the `/` endpoint of `swad`. For `/login`, no path
-in `proxy_pass` is needed because the external route is exatly the same
-as the internal one. With that configuration, we also don't need to use
-`X-SWAD-Login`.
+request always goes to the `/` endpoint of `swad`. For `/login`, we map
+the request to the same path in the backend, *without* a trailing slash,
+so sub-paths are also passed correctly. This is required to find e.g. the
+stylesheet for the login form. We could use a different route by
+configuring `login_route` in `swad.conf`.
 
 Some key aspects to make this work are:
 

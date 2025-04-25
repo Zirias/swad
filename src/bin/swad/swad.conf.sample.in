@@ -71,6 +71,16 @@
 #
 ; login_fail_limit = 900:5
 
+# Where to expose the login endpoint
+#
+# This configures the base route for the login endpoint, including its
+# resources (style and optionally javascript) found in the /static sub-route.
+#
+# If not given, it defaults to /login
+# (so resources are found in /login/static)
+#
+; login_route = /login
+
 # ============================================================================
 
 # Server(s).

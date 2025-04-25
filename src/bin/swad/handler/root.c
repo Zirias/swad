@@ -59,10 +59,6 @@ void rootHandler(HttpContext *context)
     }
     else
     {
-	const char *loginRoute = 0;
-	const Header *loginHdr = HeaderSet_single(hdr, "X-SWAD-Login");
-	if (loginHdr) loginRoute = Header_value(loginHdr);
-	if (!loginRoute || !*loginRoute) loginRoute = loginHandler_route();
 	const char *rdr = loginHandler_rdr(hdr, pathParser);
 	Session_setProp(session, "auth_realm", PSC_copystr(realm), free);
 	Session_setProp(session, "auth_rdr", PSC_copystr(rdr), free);
@@ -72,7 +68,8 @@ void rootHandler(HttpContext *context)
 	if (!ua || !*ua) ua = "<Unknown>";
 	PSC_Log_fmt(PSC_L_INFO, "auth: requesting login: [realm] %s - "
 		"[path] %s - [user agent] %s", realm, rdr, ua);
-	response = HttpResponse_createRedirect(HTTP_FORBIDDEN, loginRoute);
+	response = HttpResponse_createRedirect(HTTP_FORBIDDEN,
+		loginHandler_route());
     }
 
 done:

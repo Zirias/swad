@@ -55,9 +55,12 @@ static void setupPipeline(HttpServer *server)
     HttpServer_addMiddleware(server, MW_FormData);
     HttpServer_addMiddleware(server, MW_CSRFProtect);
 
-    HttpServer_addRoute(server, "/login/static", staticHandler, HTTP_GET, 0);
-    HttpServer_addRoute(server, "/login", loginHandler, HTTP_GET|HTTP_POST, 0);
-    HttpServer_addRoute(server, "/", rootHandler, HTTP_GET, 0);
+    HttpServer_addRoute(server, Config_staticRoute(),
+	    staticHandler, HTTP_GET, 0);
+    HttpServer_addRoute(server, Config_loginRoute(),
+	    loginHandler, HTTP_GET|HTTP_POST, 0);
+    HttpServer_addRoute(server, "/",
+	    rootHandler, HTTP_GET, 0);
 
     HttpServer_setLogLevelCallback(server, logLevelFor);
 }
@@ -167,6 +170,8 @@ static void prestartup(void *receiver, void *sender, void *args)
 	MW_SessionOpts_addLimit(seconds, limit);
     }
     MW_Session_init();
+
+    loginHandler_setRoute(Config_loginRoute());
 
     for (size_t i = 0; Config_loginFailLimit(i, &seconds, &limit); ++i)
     {
