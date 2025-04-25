@@ -101,6 +101,7 @@ swad_MODULES+=		cred/powchecker
 swad_DEFINES+=		-DCRED_POW
 swad_SFILES+=		pow.mjs
 swad_TMPL+=		pow
+swad_DOCS+=		README.pow.md
   ifneq ($(OPENSSLINC)$(OPENSSLLIB),)
     ifeq ($(OPENSSLINC),)
 $(error OPENSSLLIB specified without OPENSSLINC)

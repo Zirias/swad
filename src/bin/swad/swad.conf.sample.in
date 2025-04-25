@@ -240,6 +240,18 @@
 # |            | privileges, if swad is started as root.                     |
 # |            |                                                             |
 # |            | arg_1:   The PAM service name (required)                    |
+# >------------+-------------------------------------------------------------<
+# | pow        | Require "proof of work" from the client.                    |
+# |            |                                                             |
+# |            | This module provides a guest login with a fixed user name   |
+# |            | and password combination, but upon login also requires the  |
+# |            | client browser to solve a cryptographic puzzle.             |
+# |            |                                                             |
+# |            | More details about it can be found in README.pow.md         |
+# |            |                                                             |
+# |            | arg_1:   Puzzle difficulty (optional, default: 4)           |
+# |            | arg_2:   User name (optional, default: guest)               |
+# |            | arg_3:   Password (optional, default: guest)                |
 # `------------^-------------------------------------------------------------'
 #
 # Example:
@@ -248,6 +260,7 @@
 # snakeoil = exec:%%SYSCONFDIR%%/swad/check.sh:2000:2000
 # passwd = file:%%SYSCONFDIR%%/swad/passwd
 # pam_system = pam:system
+# guest = pow:5
 #
 [checkers]
 ;
@@ -279,6 +292,7 @@
 # [realms]
 # MySecretService = snakeoil:passwd:pam_system
 # MySecretService_login_fail_limit = 1800:3
+# MyPublicStuff = pow:pam_system
 #
 [realms]
 ; SWAD = dummy

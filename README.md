@@ -32,6 +32,9 @@ sub-requests for authentication, like nginx' `auth_request` module.
   does not drop privileges. So, when `swad` is started as root, PAM
   authentication will also work for PAM modules which require root
   privileges, like `pam_unix.so`.
+* `pow`: Allow guest logins with a "proof of work" scheme: The client's
+  browser is given a cryptographic puzzle to solve for granting access.
+  For more details, see [README.pow.md](README.pow.md).
 
 ## How it works
 
@@ -183,7 +186,8 @@ Dependencies:
   (GNU GCC and LLVM clang work fine)
 * GNU make
 * OpenSSL, or a compatible implementation like LibreSSL, when building with
-  bundled poser and TLS enabled
+  bundled poser and TLS enabled, or when building with the POW credentials
+  checker
 * PAM (libpam and headers) when building with the PAM credentials checker
 
 To build and install swad, you can simply type
@@ -220,8 +224,8 @@ The following build options are available:
 
   Default: `on`.
 
-* `OPENSSLINC`/`OPENSSLLIB` (paths, only for `WITH_POSER_TLS=on`): Override
-  base paths to OpenSSL includes and libraries.
+* `OPENSSLINC`/`OPENSSLLIB` (paths, only for `WITH_POSER_TLS=on` or
+  `CRED_POW=on`): Override base paths to OpenSSL includes and libraries.
 
   Default: Obtain from pkg-config.
 
@@ -281,6 +285,10 @@ The following build options are available:
 
 * `CRED_PAM` (bool): Build with the "pam" credentials checker. Also build and
   install the required pam helper binary.
+
+  Default: `on`
+
+* `CRED_POW` (bool): Build with the "pow" credentials checker.
 
   Default: `on`
 
