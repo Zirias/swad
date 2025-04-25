@@ -19,6 +19,7 @@
 
 #define DEFCONFFILE SYSCONFDIR "/swad.conf"
 #define DEFPIDFILE RUNSTATEDIR "/swad.pid"
+#define DEFRESDIR SYSCONFDIR "/swad"
 
 struct CfgChecker
 {
@@ -79,6 +80,7 @@ static char *cfg_pidfile;
 static const char *pidfile;
 static char *loginRoute;
 static char *staticRoute;
+static char *resourceDir;
 static long uid = -1;
 static long gid = -1;
 static int resolveHosts = -1;
@@ -531,6 +533,12 @@ static void readOption(char *lp)
 	staticRoute = PSC_malloc(routelen + sizeof "/static");
 	memcpy(staticRoute, value, routelen);
 	memcpy(staticRoute+routelen, "/static", sizeof "/static");
+	return;
+    }
+    if (!strcmp(key, "resource_dir"))
+    {
+	free(resourceDir);
+	resourceDir = PSC_copystr(value);
 	return;
     }
 
@@ -989,6 +997,12 @@ const char *Config_staticRoute(void)
     return staticRoute;
 }
 
+const char *Config_resourceDir(void)
+{
+    if (!resourceDir) return DEFRESDIR;
+    return resourceDir;
+}
+
 void Config_done(void)
 {
     for (size_t i = 0; i < realms_count; ++i)
@@ -1030,6 +1044,7 @@ void Config_done(void)
     }
     free(servers);
     free(cfg_pidfile);
+    free(resourceDir);
     free(staticRoute);
     free(loginRoute);
 
@@ -1054,6 +1069,7 @@ void Config_done(void)
     verbose = 0;
     nsessionLimits = 0;
     nloginLimits = 0;
+    resourceDir = 0;
     loginRoute = 0;
     staticRoute = 0;
 }

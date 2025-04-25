@@ -81,6 +81,22 @@
 #
 ; login_route = /login
 
+# Where to find web resources
+#
+# This directory is searched for templates and the global stylesheets,
+# overriding the builtin files if found. They are only read once at startup.
+#
+# Templates can be suffixed with .<realm>.html to only use them for the
+# specific realm, so for example the file
+#
+#   login.SWAD.html
+#
+# would override the global login.html template for the default realm "SWAD".
+#
+# If not given, defaults to %%SYSCONFDIR%%/swad
+#
+; resource_dir = %%SYSCONFDIR%%/swad
+
 # ============================================================================
 
 # Server(s).
