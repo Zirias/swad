@@ -35,11 +35,11 @@ with just an instant of waiting.
   request it gets from the proxy.
 * Anubis "only" provides the crypto challenge, while swad offers logins using
   different methods. On the other hand, Anubis offers a fancy UI with nice
-  pictures, explanations, even a progress bar, while swad's `pov` checker does
+  pictures, explanations, even a progress bar, while swad's `pow` checker does
   it pretty much "bare bones", just showing a simple spinner while the client
   solves the puzzle.
 * Anubis creates challenges using some deterministic algorithm, the challenges
-  created by swad's `pov` checker are completely random. This is most likely
+  created by swad's `pow` checker are completely random. This is most likely
   irrelevant in practice.
 * Anubis issues a signed JWT on success, swad works with a server-side session
   identified by a random session ID. The advantage of the JWT is not requiring
