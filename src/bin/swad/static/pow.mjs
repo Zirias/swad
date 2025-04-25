@@ -25,9 +25,9 @@
 	    function b64num(num) {
 		let b64 = '';
 		do {
-		    b64 += alphabet[num%64];
-		    num = Math.floor(num/64);
-		} while (num !== 0);
+		    b64 += alphabet[num&0x3f];
+		    num >>= 6;
+		} while (num);
 		return b64;
 	    }
 
@@ -46,14 +46,9 @@
 		for (; found == null; nonce += step) {
 		    found = b64num(nonce);
 		    let hash = new Uint8Array(await sha256(challenge + found));
-		    if (hash.length < difficulty) {
-			found = null;
-			continue;
-		    }
 		    for (let i = 0; i < difficulty; ++i) {
-			let nibble = hash[Math.floor(i/2)]
-			    >> (i%2===0?4:0) & 0xf;
-			if (nibble !== 0) {
+			let nibble = hash[i>>1] >> (!(i%2)<<2) & 0xf;
+			if (nibble) {
 			    found = null;
 			    break;
 			}
