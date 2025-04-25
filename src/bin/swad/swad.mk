@@ -72,8 +72,10 @@ swad_SUB_LIST=		"RUNSTATEDIR=$(runstatedir)" \
 			"SYSCONFDIR=$(sysconfdir)"
 swad_DOCS=		README.md \
 			LICENSE.txt
-swad_EXTRADIRS=		sysconf
+swad_swadconfdir=	$(swad_sysconfdir)/swad
+swad_EXTRADIRS=		sysconf swadconf
 swad_sysconf_FILES=	swad.conf.sample
+swad_swadconf_FILES=	$(foreach l,$(swad_TMPL),$l.html.sample:tmpl/$l.html)
 
 ifeq ($(CRED_EXEC),1)
 swad_MODULES+=		cred/execchecker
