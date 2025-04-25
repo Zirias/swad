@@ -120,7 +120,7 @@ static CredentialsChecker *createExecChecker(const CfgChecker *cfg)
 #ifdef CRED_POW
 static CredentialsChecker *createPowChecker(const CfgChecker *cfg)
 {
-    unsigned difficulty = 5;
+    unsigned difficulty = 4;
     const char *user = "guest";
     const char *password = "guest";
 
