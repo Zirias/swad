@@ -172,6 +172,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     MW_Session_init();
 
     loginHandler_setRoute(Config_loginRoute());
+    staticHandler_init(Config_resourceDir());
 
     for (size_t i = 0; Config_loginFailLimit(i, &seconds, &limit); ++i)
     {
@@ -332,8 +333,10 @@ static void shutdown(void *receiver, void *sender, void *args)
     free(servers);
     servers = 0;
 
+    staticHandler_done();
     Authenticator_done();
     MW_Session_done();
+    Config_done();
 }
 
 int main(int argc, char **argv)

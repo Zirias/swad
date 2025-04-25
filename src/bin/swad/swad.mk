@@ -75,7 +75,8 @@ swad_DOCS=		README.md \
 swad_swadconfdir=	$(swad_sysconfdir)/swad
 swad_EXTRADIRS=		sysconf swadconf
 swad_sysconf_FILES=	swad.conf.sample
-swad_swadconf_FILES=	$(foreach l,$(swad_TMPL),$l.html.sample:tmpl/$l.html)
+swad_swadconf_FILES=	style.css.sample:static/style.css \
+			$(foreach l,$(swad_TMPL),$l.html.sample:tmpl/$l.html)
 
 ifeq ($(CRED_EXEC),1)
 swad_MODULES+=		cred/execchecker

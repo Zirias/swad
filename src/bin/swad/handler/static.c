@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L
+
 #include "static.h"
 
 #include "../http/httpcontext.h"
@@ -7,23 +9,67 @@
 #include "../staticfiles.h"
 #include "login.h"
 
+#include <fcntl.h>
+#include <poser/core/util.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 struct StaticFile
 {
     const char *path;
-    const unsigned char **content;
+    const uint8_t **content;
     const size_t *contentsz;
     MediaType type;
 };
 
-static const struct StaticFile files[] = {
+static uint8_t *style_css_file;
+static const uint8_t *style_css;
+static size_t style_css_sz;
+
+static struct StaticFile files[] = {
 #ifdef CRED_POW
     { "pow.mjs", &static_pow_mjs, &static_pow_mjs_sz, MT_JS },
 #endif
-    { "style.css", &static_style_css, &static_style_css_sz, MT_CSS }
+    { "style.css", &style_css, &style_css_sz, MT_CSS }
 };
+
+void staticHandler_init(const char *resdir)
+{
+    char buf[1024];
+    struct stat st;
+    snprintf(buf, sizeof buf, "%s/style.css", resdir);
+    int fd = open(buf, O_RDONLY);
+    if (fd < 0) goto skip;
+    if (fstat(fd, &st) < 0) goto done;
+    style_css_sz = st.st_size;
+    style_css_file = PSC_malloc(style_css_sz);
+    if (read(fd, style_css_file, style_css_sz) != (ssize_t)style_css_sz)
+    {
+	free(style_css_file);
+	style_css_file = 0;
+	goto done;
+    }
+    style_css = style_css_file;
+
+done:
+    close(fd);
+skip:
+    if (!style_css)
+    {
+	style_css = static_style_css;
+	style_css_sz = static_style_css_sz;
+    }
+}
+
+void staticHandler_done(void)
+{
+    free(style_css_file);
+    style_css_file = 0;
+    style_css = 0;
+}
 
 void staticHandler(HttpContext *context)
 {
