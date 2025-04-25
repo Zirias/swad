@@ -1,0 +1,32 @@
+* {
+  font-family: sans-serif;
+  background-color: Black;
+  color: LightGray;
+}
+body {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+h1, h2, p {
+  text-align: center;
+}
+input {
+  display: block;
+  margin: 1em auto;
+  padding: .2em;
+  border-style: solid;
+  border-color: DarkGray;
+  border-width: 2pt;
+  border-radius: 4pt;
+  outline: none;
+}
+input:focus {
+  border-style: solid;
+  border-color: DodgerBlue;
+  outline: none;
+}
+.error {
+  color: Red;
+}

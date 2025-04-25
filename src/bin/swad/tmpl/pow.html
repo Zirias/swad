@@ -1,27 +1,8 @@
 <html>
   <head>
     <title>%%REALM%% Login</title>
+    <link rel="stylesheet" type="text/css" href="%%SELF%%/static/style.css">
 <style type="text/css">
-* {
-  font-family: sans-serif;
-  background-color: black;
-  color: lightgray;
-}
-body {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-form {
-  display: none;
-}
-.error {
-  display: block;
-  width: 100%;
-  text-align: center;
-  color: red;
-}
 .spinner {
   display: none;
   border: 4px solid DodgerBlue;
@@ -48,10 +29,8 @@ form {
     <form action="%%SELF%%" method="post" autocomplete="off"
 	  data-challenge="%%CHALLENGE%%" data-difficulty="%%DIFFICULTY%%">
       <input type="hidden" name="%%CSRFNAME%%" value="%%CSRFTOKEN%%">
-      <input type="hidden" name="user" placeholder="user name" value="%%USER%%"
-	  maxlength="32" autofocus><br>
-      <input type="hidden" name="pw" placeholder="password"
-	  maxlength="32"><br>
+      <input type="hidden" name="user" value="%%USER%%">
+      <input type="hidden" name="pw">
       <input type="hidden" name="login" value="login">
     </form>
   </body>

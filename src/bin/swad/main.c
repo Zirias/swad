@@ -2,6 +2,7 @@
 #include "config.h"
 #include "handler/login.h"
 #include "handler/root.h"
+#include "handler/static.h"
 #include "http/httprequest.h"
 #include "http/httpstatus.h"
 #include "httpserver.h"
@@ -25,7 +26,6 @@
 #endif
 
 #ifdef CRED_POW
-#  include "handler/static.h"
 #  include "cred/powchecker.h"
 #endif
 
@@ -55,9 +55,7 @@ static void setupPipeline(HttpServer *server)
     HttpServer_addMiddleware(server, MW_FormData);
     HttpServer_addMiddleware(server, MW_CSRFProtect);
 
-#ifdef CRED_POW
     HttpServer_addRoute(server, "/login/static", staticHandler, HTTP_GET, 0);
-#endif
     HttpServer_addRoute(server, "/login", loginHandler, HTTP_GET|HTTP_POST, 0);
     HttpServer_addRoute(server, "/", rootHandler, HTTP_GET, 0);
 

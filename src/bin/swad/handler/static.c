@@ -5,7 +5,9 @@
 #include "../mediatype.h"
 #include "../middleware/pathparser.h"
 #include "../staticfiles.h"
+#include "login.h"
 
+#include <stdio.h>
 #include <string.h>
 
 struct StaticFile
@@ -17,7 +19,10 @@ struct StaticFile
 };
 
 static const struct StaticFile files[] = {
-    { "/login/static/pow.mjs", &static_pow_mjs, &static_pow_mjs_sz, MT_JS }
+#ifdef CRED_POW
+    { "pow.mjs", &static_pow_mjs, &static_pow_mjs_sz, MT_JS },
+#endif
+    { "style.css", &static_style_css, &static_style_css_sz, MT_CSS }
 };
 
 void staticHandler(HttpContext *context)
@@ -26,15 +31,22 @@ void staticHandler(HttpContext *context)
 
     const PathParser *pathParser = PathParser_get(context);
     if (!pathParser) return;
-
-    for (unsigned i = 0; i < sizeof files / sizeof *files; ++i)
+    char baseroute[256];
+    int routelen = snprintf(baseroute, sizeof baseroute, "%s/static/",
+	    loginHandler_route());
+    const char *path = PathParser_path(pathParser);
+    if (routelen > 0 && !strncmp(path, baseroute, routelen))
     {
-	if (!strcmp(files[i].path, PathParser_path(pathParser)))
+	path += routelen;
+	for (unsigned i = 0; i < sizeof files / sizeof *files; ++i)
 	{
-	    response = HttpResponse_create(HTTP_OK, files[i].type);
-	    HttpResponse_setBody(response, *files[i].content,
-		    *files[i].contentsz);
-	    break;
+	    if (!strcmp(files[i].path, path))
+	    {
+		response = HttpResponse_create(HTTP_OK, files[i].type);
+		HttpResponse_setBody(response, *files[i].content,
+			*files[i].contentsz);
+		break;
+	    }
 	}
     }
 

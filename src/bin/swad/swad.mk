@@ -28,6 +28,7 @@ swad_MODULES=		authenticator \
 			config \
 			handler/login \
 			handler/root \
+			handler/static \
 			htmlescape \
 			http/header \
 			http/headerset \
@@ -46,6 +47,7 @@ swad_MODULES=		authenticator \
 			middleware/session \
 			proxylist \
 			ratelimit \
+			staticfiles \
 			template \
 			tmpl \
 			urlencode \
@@ -57,7 +59,7 @@ swad_DEFINES=		-DLIBEXECDIR=\"$(libexecdir)\" \
 			-DVERSION=\"$(swad_VERSION)\"
 swad_LDFLAGS=		-pthread
 swad_PKGDEPS=		zlib
-swad_SFILES=		#
+swad_SFILES=		style.css
 swad_TMPL=		login \
 			logout
 swad_GEN=		BIN2CSTR CHELP
@@ -92,9 +94,7 @@ swad_DEFINES+=		-DCRED_PAM
 endif
 
 ifeq ($(CRED_POW),1)
-swad_MODULES+=		cred/powchecker \
-			handler/static \
-			staticfiles
+swad_MODULES+=		cred/powchecker
 swad_DEFINES+=		-DCRED_POW
 swad_SFILES+=		pow.mjs
 swad_TMPL+=		pow
