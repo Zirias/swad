@@ -93,11 +93,22 @@ static void pamHelperDone(void *receiver, void *sender, void *args)
     if (!refcnt) PSC_Service_shutdownUnlock();
 }
 
+static void pipeClosed(void *receiver, void *sender, void *args)
+{
+    (void)receiver;
+    (void)args;
+
+    PSC_Connection *conn = sender;
+    if (conn == pamStdin) pamStdin = 0;
+    else if (conn == pamStdout) pamStdout = 0;
+}
+
 static void setPamStream(void *obj,
 	PSC_StreamType stream, PSC_Connection *conn)
 {
     (void)obj;
 
+    PSC_Event_register(PSC_Connection_closed(conn), 0, pipeClosed, 0);
     if (stream == PSC_ST_STDIN)
     {
 	pamStdin = conn;
@@ -149,7 +160,7 @@ static void destroyChecker(void *obj)
     pthread_mutex_lock(&pamLock);
     if (pamProcess && !--refcnt)
     {
-	PSC_Connection_close(pamStdin, 0);
+	if (pamStdin) PSC_Connection_close(pamStdin, 0);
 	PSC_Service_shutdownLock();
     }
     pthread_mutex_unlock(&pamLock);
