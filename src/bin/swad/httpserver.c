@@ -495,7 +495,8 @@ done:
 	    PSC_Event_unregister(PSC_Connection_closed(conn), self,
 		    pipelineJobCanceled, 0);
 	    PSC_ThreadJob_destroy(ctx->job);
-	    response = HttpResponse_createError(HTTP_SERVICEUNAVAILABLE, 0);
+	    response = HttpResponse_createError(HTTP_TOOMANYREQUESTS,
+		    "Request queue full, please try again later");
 	}
 	else
 	{
