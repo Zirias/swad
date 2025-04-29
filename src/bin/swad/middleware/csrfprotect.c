@@ -44,8 +44,10 @@ void MW_CSRFProtect(HttpContext *context)
 	if (!token || !tokenVal || strcmp(token, tokenVal))
 	{
 	    HttpContext_setResponse(context, HttpResponse_createError(
-			HTTP_FORBIDDEN, "Request tampering detected. "
-			"Not here, man."));
+			HTTP_FORBIDDEN, "Possible request tampering detected. "
+			"Authorization for submitting this form refused. "
+			"Make sure to only submit the form you requested "
+			"last."));
 	    return;
 	}
 	Session_setProp(session, PROPNAME, 0, 0);

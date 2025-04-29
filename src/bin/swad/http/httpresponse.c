@@ -106,15 +106,27 @@ static const char *statusMsg(HttpStatus status)
 {
     switch (status)
     {
-	case HTTP_BADREQUEST: return "Uhm, no.";
-	case HTTP_FORBIDDEN: return "No, no!";
-	case HTTP_NOTFOUND: return "Nothing here.";
-	case HTTP_METHODNOTALLOWED: return "No, no.";
-	case HTTP_LENGTHREQUIRED: return "No streams.";
-	case HTTP_REQUESTENTITYTOOLARGE: return "Don't exaggerate.";
-	case HTTP_TOOMANYREQUESTS: return "Gimme a break.";
-	case HTTP_SERVICEUNAVAILABLE: return "Sorry, too busy, try later.";
-	default: return "Oops.";
+	case HTTP_BADREQUEST:
+	    return "The request is invalid or inconsistent.";
+	case HTTP_UNAUTHORIZED:
+	    return "Accessing this resource requires authentication.";
+	case HTTP_FORBIDDEN:
+	    return "You are not authorized to access this resource.";
+	case HTTP_NOTFOUND:
+	    return "The requested resource was not found.";
+	case HTTP_METHODNOTALLOWED:
+	    return "The method you used is not supported by this resource.";
+	case HTTP_LENGTHREQUIRED:
+	    return "This request must include a Content-Length.";
+	case HTTP_REQUESTENTITYTOOLARGE:
+	    return "Maximum header or body size exceeded.";
+	case HTTP_TOOMANYREQUESTS:
+	    return "The service is currently too busy, try again later.";
+	case HTTP_INTERNALSERVERERROR:
+	    return "Something unexpected went wrong, sorry about that.";
+	case HTTP_SERVICEUNAVAILABLE:
+	    return "The service is currently unavailable, try again later.";
+	default: return "";
     }
 }
 
