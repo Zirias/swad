@@ -13,10 +13,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ERROR_FORMAT "<html><head><title>%s</title></head>" \
+#define ERROR_FORMAT "<!DOCTYPE html><html><head><title>%s</title></head>" \
     "<body><h1>%s</h1><p>%s</p></body></html>"
 #define ERROR_SIZE (sizeof ERROR_FORMAT - 7)
-#define REDIRECT_FORMAT "<html><head><title>%s</title>" \
+#define REDIRECT_FORMAT "<!DOCTYPE html><html><head><title>%s</title>" \
     "<meta http-equiv=\"refresh\" content=\"0; URL=%s\"></head>" \
     "<body><a href=\"%s\">%s</a></body></html>"
 #define REDIRECT_SIZE (sizeof REDIRECT_FORMAT - 9)
