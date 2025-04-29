@@ -58,8 +58,6 @@ static void deviate(void *obj, const Authenticator *auth, HttpContext *context)
 static AuthResult check(void *obj, const char *user, const char *pw,
 	const Authenticator *auth, char **realname)
 {
-    (void)auth;
-
     PowChecker *self = obj;
     *realname = 0;
 
