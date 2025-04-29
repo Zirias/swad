@@ -8,6 +8,7 @@
 #include <grp.h>
 #include <poser/core/ipaddr.h>
 #include <poser/core/log.h>
+#include <poser/core/threadpool.h>
 #include <poser/core/util.h>
 #include <pwd.h>
 #include <stdio.h>
@@ -17,9 +18,15 @@
 
 #define ARGBUFSZ 8
 
-#define DEFCONFFILE SYSCONFDIR "/swad.conf"
-#define DEFPIDFILE RUNSTATEDIR "/swad.pid"
-#define DEFRESDIR SYSCONFDIR "/swad"
+#define DEFCONFFILE	SYSCONFDIR "/swad.conf"
+#define DEFPIDFILE	RUNSTATEDIR "/swad.pid"
+#define DEFRESDIR	SYSCONFDIR "/swad"
+#define DEFNTHREADS	8
+#define DEFCPUNTHR	1
+#define DEFMAXTHREADS	256
+#define DEFCPUNTHRBLOCK	2
+#define DEFTHRJOBQUEUE	4
+#define DEFMAXJOBQUEUE	512
 
 struct CfgChecker
 {
@@ -86,6 +93,11 @@ static long gid = -1;
 static int resolveHosts = -1;
 static int foreground = 0;
 static int verbose = 0;
+static int defaultThreads = 0;
+static int threadsPerCpu = 0;
+static int maxThreads = 0;
+static int jobQueuePerThread = 0;
+static int maxJobQueue = 0;
 static size_t nsessionLimits = 0;
 static uint16_t sessionSeconds[8];
 static uint16_t sessionLimits[8];
@@ -541,6 +553,31 @@ static void readOption(char *lp)
 	resourceDir = PSC_copystr(value);
 	return;
     }
+    if (!strcmp(key, "threads_per_cpu"))
+    {
+	if (intArg(&threadsPerCpu, value, 1, 256, 10) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "default_threads"))
+    {
+	if (intArg(&defaultThreads, value, 1, 4096, 10) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "max_threads"))
+    {
+	if (intArg(&maxThreads, value, 1, 4096, 10) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "job_queue_per_thread"))
+    {
+	if (intArg(&jobQueuePerThread, value, 1, 64, 10) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "max_job_queue"))
+    {
+	if (intArg(&maxJobQueue, value, 1, 8192, 10) < 0) goto inval;
+	return;
+    }
 
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown global option `%s', "
 	    "ignoring", cfgfile, lineno, key);
@@ -985,6 +1022,37 @@ int Config_loginFailLimit(size_t num, uint16_t *seconds, uint16_t *limit)
     return 1;
 }
 
+int Config_defaultThreads(void)
+{
+    if (defaultThreads) return defaultThreads;
+    return DEFNTHREADS;
+}
+
+int Config_threadsPerCpu(void)
+{
+    if (threadsPerCpu) return threadsPerCpu;
+    if (PSC_AsyncTask_awaitIsBlocking()) return DEFCPUNTHRBLOCK;
+    return DEFCPUNTHR;
+}
+
+int Config_maxThreads(void)
+{
+    if (maxThreads) return maxThreads;
+    return DEFMAXTHREADS;
+}
+
+int Config_jobQueuePerThread(void)
+{
+    if (jobQueuePerThread) return jobQueuePerThread;
+    return DEFTHRJOBQUEUE;
+}
+
+int Config_maxJobQueue(void)
+{
+    if (maxJobQueue) return maxJobQueue;
+    return DEFMAXJOBQUEUE;
+}
+
 const char *Config_loginRoute(void)
 {
     if (!loginRoute) return "/login";
@@ -1067,6 +1135,11 @@ void Config_done(void)
     resolveHosts = -1;
     foreground = 0;
     verbose = 0;
+    defaultThreads = 0;
+    threadsPerCpu = 0;
+    maxThreads = 0;
+    jobQueuePerThread = 0;
+    maxJobQueue = 0;
     nsessionLimits = 0;
     nloginLimits = 0;
     resourceDir = 0;

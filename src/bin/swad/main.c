@@ -348,6 +348,12 @@ int main(int argc, char **argv)
     PSC_Log_setFileLogger(stderr);
     Config_readConfigFile();
 
+    PSC_ThreadOpts_init(Config_defaultThreads());
+    PSC_ThreadOpts_threadsPerCpu(Config_threadsPerCpu());
+    PSC_ThreadOpts_maxThreads(Config_maxThreads());
+    PSC_ThreadOpts_queuePerThread(Config_jobQueuePerThread());
+    PSC_ThreadOpts_maxQueue(Config_maxJobQueue());
+
     PSC_RunOpts_init(Config_pidfile());
     PSC_RunOpts_enableDefaultLogging("swad");
     PSC_RunOpts_runas(Config_uid(), Config_gid());
