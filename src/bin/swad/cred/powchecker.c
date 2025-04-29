@@ -63,10 +63,9 @@ static AuthResult check(void *obj, const char *user, const char *pw,
 
     if (!strcmp(user, self->user))
     {
-	if (!strcmp(pw, self->password)) return AR_DEVIATE;
 	const char *challenge = Session_getProp(Authenticator_session(auth),
 		"_POW_CHALLENGE");
-	if (!challenge) return AR_FAILED;
+	if (!challenge) goto checkdeviate;
 	char tohash[128];
 	int tohashlen = snprintf(tohash, sizeof tohash, "%s%s", challenge, pw);
 	Session_setProp(Authenticator_session(auth), "_POW_CHALLENGE", 0, 0);
@@ -75,9 +74,13 @@ static AuthResult check(void *obj, const char *user, const char *pw,
 	for (unsigned i = 0; i < self->difficulty; ++i)
 	{
 	    unsigned char nibble = (hash[i/2] >> 4 * !(i % 2)) & 0xf;
-	    if (nibble != 0) return AR_FAILED;
+	    if (nibble != 0) goto checkdeviate;
 	}
 	return AR_OK;
+
+checkdeviate:
+	if (!strcmp(pw, self->password)) return AR_DEVIATE;
+	return AR_FAILED;
     }
     return AR_FAILED;
 }
