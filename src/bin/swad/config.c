@@ -70,42 +70,44 @@ typedef enum CfgSection
     CS_SERVER
 } CfgSection;
 
-static size_t checkers_count;
-static size_t checkers_capa;
-static size_t realms_count;
-static size_t realms_capa;
-static size_t servers_count;
-static size_t servers_capa;
-
-static CfgChecker **checkers;
-static CfgRealm **realms;
-static CfgServer **servers;
+struct Config
+{
+    CfgChecker **checkers;
+    CfgRealm **realms;
+    CfgServer **servers;
+    const char *cfgfile;
+    char *cfg_pidfile;
+    const char *pidfile;
+    char *loginRoute;
+    char *staticRoute;
+    char *resourceDir;
+    size_t checkers_count;
+    size_t checkers_capa;
+    size_t realms_count;
+    size_t realms_capa;
+    size_t servers_count;
+    size_t servers_capa;
+    size_t nsessionLimits;
+    size_t nloginLimits;
+    long uid;
+    long gid;
+    int resolveHosts;
+    int foreground;
+    int verbose;
+    int defaultThreads;
+    int threadsPerCpu;
+    int maxThreads;
+    int jobQueuePerThread;
+    int maxJobQueue;
+    uint16_t sessionSeconds[8];
+    uint16_t sessionLimits[8];
+    uint16_t loginSeconds[8];
+    uint16_t loginLimits[8];
+};
 
 static PSC_IpAddr *nat64Prefix;
-static const char *cfgfile;
-static char *cfg_pidfile;
-static const char *pidfile;
-static char *loginRoute;
-static char *staticRoute;
-static char *resourceDir;
-static long uid = -1;
-static long gid = -1;
-static int resolveHosts = -1;
-static int foreground = 0;
-static int verbose = 0;
-static int defaultThreads = 0;
-static int threadsPerCpu = 0;
-static int maxThreads = 0;
-static int jobQueuePerThread = 0;
-static int maxJobQueue = 0;
-static size_t nsessionLimits = 0;
-static uint16_t sessionSeconds[8];
-static uint16_t sessionLimits[8];
-static size_t nloginLimits = 0;
-static uint16_t loginSeconds[8];
-static uint16_t loginLimits[8];
-
 static unsigned lineno;
+static unsigned instcnt;
 static CfgSection section;
 static CfgServer *server;
 
@@ -170,7 +172,7 @@ done:
     return rc;
 }
 
-static int readKeyValue(char *lp, char **key, char **value)
+static int readKeyValue(Config *self, char *lp, char **key, char **value)
 {
     if (*lp == '=') goto error;
     char *k = lp;
@@ -191,26 +193,27 @@ static int readKeyValue(char *lp, char **key, char **value)
 
 error:
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] malformed line, ignoring",
-	    cfgfile, lineno);
+	    self->cfgfile, lineno);
     return 0;
 }
 
-static CfgServer *getServer(const char *name)
+static CfgServer *getServer(Config *self, const char *name)
 {
     if (name && !*name)
     {
 	PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] empty server name is not "
-		"allowed, assuming the default server", cfgfile, lineno);
+		"allowed, assuming the default server", self->cfgfile, lineno);
 	name = 0;
     }
 
     CfgServer *s = 0;
-    for (size_t i = 0; i < servers_count; ++i)
+    for (size_t i = 0; i < self->servers_count; ++i)
     {
-	if ((!name && !servers[i]->name) ||
-		(servers[i]->name && !strcmp(name, servers[i]->name)))
+	if ((!name && !self->servers[i]->name) ||
+		(self->servers[i]->name &&
+		 !strcmp(name, self->servers[i]->name)))
 	{
-	    s = servers[i];
+	    s = self->servers[i];
 	    break;
 	}
     }
@@ -222,22 +225,23 @@ static CfgServer *getServer(const char *name)
 	if (name) s->name = PSC_copystr(name);
 	s->port = 8080;
 	s->trustedHeader = PH_XFWD | PH_RFC;
-	if (servers_count == servers_capa)
+	if (self->servers_count == self->servers_capa)
 	{
-	    servers_capa += 8;
-	    servers = PSC_realloc(servers, servers_capa * sizeof *servers);
+	    self->servers_capa += 8;
+	    self->servers = PSC_realloc(self->servers,
+		    self->servers_capa * sizeof *self->servers);
 	}
-	servers[servers_count++] = s;
+	self->servers[self->servers_count++] = s;
     }
 
     return s;
 }
 
-static void readChecker(char *lp)
+static void readChecker(Config *self, char *lp)
 {
     char *key;
     char *value;
-    if (!readKeyValue(lp, &key, &value)) return;
+    if (!readKeyValue(self, lp, &key, &value)) return;
 
     char *args[8];
     size_t nargs = 0;
@@ -248,7 +252,7 @@ static void readChecker(char *lp)
 	if (nargs == sizeof args)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] too many arguments "
-		    "for checker `%s', ignoring", cfgfile, lineno, key);
+		    "for checker `%s', ignoring", self->cfgfile, lineno, key);
 	    return;
 	}
 	args[nargs++] = arg;
@@ -266,7 +270,7 @@ static void readChecker(char *lp)
     {
 	PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown credentials "
 		"checker class `%s', this checker will always fail",
-		cfgfile, lineno, key);
+		self->cfgfile, lineno, key);
 	checker->class = CC_NONE;
     }
     for (size_t i = 0; i < nargs; ++i)
@@ -274,50 +278,51 @@ static void readChecker(char *lp)
 	checker->args[i] = PSC_copystr(args[i]);
     }
     
-    if (checkers_count == checkers_capa)
+    if (self->checkers_count == self->checkers_capa)
     {
-	checkers_capa += 8;
-	checkers = PSC_realloc(checkers, checkers_capa * sizeof *checkers);
+	self->checkers_capa += 8;
+	self->checkers = PSC_realloc(self->checkers,
+		self->checkers_capa * sizeof *self->checkers);
     }
-    checkers[checkers_count++] = checker;
+    self->checkers[self->checkers_count++] = checker;
 }
 
-static void readRealm(char *lp)
+static void readRealm(Config *self, char *lp)
 {
     char *key;
     char *value;
-    if (!readKeyValue(lp, &key, &value)) return;
+    if (!readKeyValue(self, lp, &key, &value)) return;
 
     char *opt = strstr(key, "_login_fail_limit");
     if (opt && strlen(opt) == sizeof "_login_fail_limit" - 1)
     {
 	*opt++ = 0;
 	CfgRealm *realm = 0;
-	for (size_t i = 0; i < realms_count; ++i)
+	for (size_t i = 0; i < self->realms_count; ++i)
 	{
-	    if (!strcmp(realms[i]->name, key))
+	    if (!strcmp(self->realms[i]->name, key))
 	    {
-		realm = realms[i];
+		realm = self->realms[i];
 		break;
 	    }
 	}
 	if (!realm)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] %s for unknown realm "
-		    "`%s' found, ignoring", cfgfile, lineno, opt, key);
+		    "`%s' found, ignoring", self->cfgfile, lineno, opt, key);
 	    return;
 	}
 	if (realm->nlimits == sizeof realm->limits)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] too many login fail "
-		    "limit entries, ignoring", cfgfile, lineno);
+		    "limit entries, ignoring", self->cfgfile, lineno);
 	    return;
 	}
 	if (limitsArg(realm->seconds + realm->nlimits,
 		    realm->limits + realm->nlimits, value) < 0)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] invalid setting `%s' "
-		    "for %s, ignoring", cfgfile, lineno, value, opt);
+		    "for %s, ignoring", self->cfgfile, lineno, value, opt);
 	}
 	++realm->nlimits;
 	return;
@@ -331,7 +336,7 @@ static void readRealm(char *lp)
 	if (nchck == sizeof chck)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] too many checkers "
-		    "for realm `%s', ignoring", cfgfile, lineno, key);
+		    "for realm `%s', ignoring", self->cfgfile, lineno, key);
 	    return;
 	}
 	chck[nchck++] = checker;
@@ -348,19 +353,20 @@ static void readRealm(char *lp)
 	realm->checkers[i] = PSC_copystr(chck[i]);
     }
 
-    if (realms_count == realms_capa)
+    if (self->realms_count == self->realms_capa)
     {
-	realms_capa += 8;
-	realms = PSC_realloc(realms, realms_capa * sizeof *realms);
+	self->realms_capa += 8;
+	self->realms = PSC_realloc(self->realms,
+		self->realms_capa * sizeof *self->realms);
     }
-    realms[realms_count++] = realm;
+    self->realms[self->realms_count++] = realm;
 }
 
-static void readServer(char *lp)
+static void readServer(Config *self, char *lp)
 {
     char *key;
     char *value;
-    if (!readKeyValue(lp, &key, &value)) return;
+    if (!readKeyValue(self, lp, &key, &value)) return;
 
     if (!strcmp(key, "port"))
     {
@@ -433,15 +439,15 @@ static void readServer(char *lp)
     }
 
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown server option `%s', "
-	    "ignoring", cfgfile, lineno, key);
+	    "ignoring", self->cfgfile, lineno, key);
     return;
 
 inval:
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] invalid setting `%s' for %s, "
-	    "ignoring", cfgfile, lineno, value, key);
+	    "ignoring", self->cfgfile, lineno, value, key);
 }
 
-static int parseUser(const char *str)
+static int parseUser(Config *self, const char *str)
 {
     struct passwd *p;
     long tuid;
@@ -452,12 +458,12 @@ static int parseUser(const char *str)
 	tuid = p->pw_uid;
     }
     else if (!(p = getpwuid(tuid))) return -1;
-    uid = tuid;
-    if (gid == -1) gid = p->pw_gid;
+    self->uid = tuid;
+    if (self->gid == -1) self->gid = p->pw_gid;
     return 0;
 }
 
-static int parseGroup(const char *str)
+static int parseGroup(Config *self, const char *str)
 {
     struct group *g;
     long tgid;
@@ -468,127 +474,130 @@ static int parseGroup(const char *str)
 	tgid = g->gr_gid;
     }
     else if (!(g = getgrgid(tgid))) return -1;
-    gid = tgid;
+    self->gid = tgid;
     return 0;
 }
 
-static void readOption(char *lp)
+static void readOption(Config *self, char *lp)
 {
     char *key;
     char *value;
-    if (!readKeyValue(lp, &key, &value)) return;
+    if (!readKeyValue(self, lp, &key, &value)) return;
 
     if (!strcmp(key, "user"))
     {
-	if (uid < 0 && parseUser(value) < 0)
+	if (self->uid < 0 && parseUser(self, value) < 0)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown user `%s', "
-		    "ignoring", cfgfile, lineno, value);
+		    "ignoring", self->cfgfile, lineno, value);
 	}
 	return;
     }
     if (!strcmp(key, "group"))
     {
-	if (gid < 0 && parseGroup(value) < 0)
+	if (self->gid < 0 && parseGroup(self, value) < 0)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown group `%s', "
-		    "ignoring", cfgfile, lineno, value);
+		    "ignoring", self->cfgfile, lineno, value);
 	}
 	return;
     }
     if (!strcmp(key, "pidfile"))
     {
-	if (!pidfile)
+	if (!self->pidfile)
 	{
-	    cfg_pidfile = PSC_copystr(value);
-	    pidfile = cfg_pidfile;
+	    self->cfg_pidfile = PSC_copystr(value);
+	    self->pidfile = self->cfg_pidfile;
 	}
     }
     if (!strcmp(key, "resolve_hosts"))
     {
-	if (resolveHosts < 0 && boolArg(&resolveHosts, value) < 0) goto inval;
+	if (self->resolveHosts < 0 &&
+		boolArg(&self->resolveHosts, value) < 0) goto inval;
 	return;
     }
     if (!strcmp(key, "session_limit"))
     {
-	if (nsessionLimits == sizeof sessionLimits)
+	if (self->nsessionLimits == sizeof self->sessionLimits)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] too many session "
-		    "limit entries, ignoring", cfgfile, lineno);
+		    "limit entries, ignoring", self->cfgfile, lineno);
 	    return;
 	}
-	if (limitsArg(sessionSeconds + nsessionLimits,
-		    sessionLimits + nsessionLimits, value) < 0) goto inval;
-	++nsessionLimits;
+	if (limitsArg(self->sessionSeconds + self->nsessionLimits,
+		    self->sessionLimits + self->nsessionLimits, value)
+		< 0) goto inval;
+	++self->nsessionLimits;
 	return;
     }
     if (!strcmp(key, "login_fail_limit"))
     {
-	if (nloginLimits == sizeof loginLimits)
+	if (self->nloginLimits == sizeof self->loginLimits)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] too many login fail "
-		    "limit entries, ignoring", cfgfile, lineno);
+		    "limit entries, ignoring", self->cfgfile, lineno);
 	    return;
 	}
-	if (limitsArg(loginSeconds + nloginLimits,
-		    loginLimits + nloginLimits, value) < 0) goto inval;
-	++nloginLimits;
+	if (limitsArg(self->loginSeconds + self->nloginLimits,
+		    self->loginLimits + self->nloginLimits, value)
+		< 0) goto inval;
+	++self->nloginLimits;
 	return;
     }
     if (!strcmp(key, "login_route"))
     {
-	free(loginRoute);
-	free(staticRoute);
+	free(self->loginRoute);
+	free(self->staticRoute);
 	size_t routelen = strlen(value);
-	loginRoute = PSC_malloc(routelen + 1);
-	memcpy(loginRoute, value, routelen + 1);
-	staticRoute = PSC_malloc(routelen + sizeof "/static");
-	memcpy(staticRoute, value, routelen);
-	memcpy(staticRoute+routelen, "/static", sizeof "/static");
+	self->loginRoute = PSC_malloc(routelen + 1);
+	memcpy(self->loginRoute, value, routelen + 1);
+	self->staticRoute = PSC_malloc(routelen + sizeof "/static");
+	memcpy(self->staticRoute, value, routelen);
+	memcpy(self->staticRoute+routelen, "/static", sizeof "/static");
 	return;
     }
     if (!strcmp(key, "resource_dir"))
     {
-	free(resourceDir);
-	resourceDir = PSC_copystr(value);
+	free(self->resourceDir);
+	self->resourceDir = PSC_copystr(value);
 	return;
     }
     if (!strcmp(key, "threads_per_cpu"))
     {
-	if (intArg(&threadsPerCpu, value, 1, 256, 10) < 0) goto inval;
+	if (intArg(&self->threadsPerCpu, value, 1, 256, 10) < 0) goto inval;
 	return;
     }
     if (!strcmp(key, "default_threads"))
     {
-	if (intArg(&defaultThreads, value, 1, 4096, 10) < 0) goto inval;
+	if (intArg(&self->defaultThreads, value, 1, 4096, 10) < 0) goto inval;
 	return;
     }
     if (!strcmp(key, "max_threads"))
     {
-	if (intArg(&maxThreads, value, 1, 4096, 10) < 0) goto inval;
+	if (intArg(&self->maxThreads, value, 1, 4096, 10) < 0) goto inval;
 	return;
     }
     if (!strcmp(key, "job_queue_per_thread"))
     {
-	if (intArg(&jobQueuePerThread, value, 1, 64, 10) < 0) goto inval;
+	if (intArg(&self->jobQueuePerThread, value, 1, 64, 10) < 0) goto inval;
 	return;
     }
     if (!strcmp(key, "max_job_queue"))
     {
-	if (intArg(&maxJobQueue, value, 1, 8192, 10) < 0) goto inval;
+	if (intArg(&self->maxJobQueue, value, 1, 8192, 10) < 0) goto inval;
 	return;
     }
 
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown global option `%s', "
-	    "ignoring", cfgfile, lineno, key);
+	    "ignoring", self->cfgfile, lineno, key);
     return;
 
 inval:
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] invalid setting `%s' for %s, "
-	    "ignoring", cfgfile, lineno, value, key);
+	    "ignoring", self->cfgfile, lineno, value, key);
 }
 
-static CfgSection readSection(char *lp)
+static CfgSection readSection(Config *self, char *lp)
 {
     ++lp;
     skipws(lp);
@@ -612,22 +621,22 @@ static CfgSection readSection(char *lp)
 	if (*name == ':') *name++ = 0;
 	else if (!*name) name = 0;
 	else goto unknown;
-	server = getServer(name);
+	server = getServer(self, name);
 	return CS_SERVER;
     }
 
 unknown:
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] unknown section `%s', "
-	    "ignoring the following values", cfgfile, lineno, start);
+	    "ignoring the following values", self->cfgfile, lineno, start);
     return CS_INVALID;
 
 error:
     PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] malformed section, ignoring",
-	    cfgfile, lineno);
+	    self->cfgfile, lineno);
     return section;
 }
 
-static void readConfigFile(FILE *f)
+static void readConfigFile(Config *self, FILE *f)
 {
     char linebuf[1024];
     lineno = 0;
@@ -642,7 +651,7 @@ static void readConfigFile(FILE *f)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING,
 		    "config: [%s:%u] line exceeds maximum length, ignoring",
-		    cfgfile, lineno);
+		    self->cfgfile, lineno);
 	    while ((lp = fgets(linebuf, sizeof linebuf, f)))
 	    {
 		if (strchr(lp, '\n')) break;
@@ -654,22 +663,22 @@ static void readConfigFile(FILE *f)
 	if (!*lp || *lp == ';' || *lp == '#') continue;
 	if (*lp == '[')
 	{
-	    section = readSection(lp);
+	    section = readSection(self, lp);
 	}
 	else switch(section)
 	{
 	    case CS_INVALID:	break;
-	    case CS_GLOBAL:	readOption(lp); break;
-	    case CS_CHECKERS:	readChecker(lp); break;
-	    case CS_REALMS:	readRealm(lp); break;
-	    case CS_SERVER:	readServer(lp); break;
+	    case CS_GLOBAL:	readOption(self, lp); break;
+	    case CS_CHECKERS:	readChecker(self, lp); break;
+	    case CS_REALMS:	readRealm(self, lp); break;
+	    case CS_SERVER:	readServer(self, lp); break;
 	}
     }
     
     if (ferror(f) || !feof(f))
     {
 	PSC_Log_fmt(PSC_L_ERROR,
-		"config: Error reading config file %s", cfgfile);
+		"config: Error reading config file %s", self->cfgfile);
     }
 }
 
@@ -698,27 +707,28 @@ static int addArg(char *args, int *idx, char opt)
     return 0;
 }
 
-static int optArg(char *args, int *idx, char *op, const char **error)
+static int optArg(Config *self, char *args, int *idx, char *op,
+	const char **error)
 {
     *error = 0;
     if (!*idx) return -1;
     switch (args[--*idx])
     {
 	case 'c':
-	    cfgfile = op;
+	    self->cfgfile = op;
 	    break;
 	case 'g':
-	    if (parseGroup(op) < 0)
+	    if (parseGroup(self, op) < 0)
 	    {
 		*error = "Unknown group";
 		return -1;
 	    }
 	    break;
 	case 'p':
-	    pidfile = op;
+	    self->pidfile = op;
 	    break;
 	case 'u':
-	    if (parseUser(op) < 0)
+	    if (parseUser(self, op) < 0)
 	    {
 		*error = "Unknown user";
 		return -1;
@@ -730,7 +740,7 @@ static int optArg(char *args, int *idx, char *op, const char **error)
     return 0;
 }
 
-static int readArguments(int argc, char **argv)
+static int readArguments(Config *self, int argc, char **argv)
 {
     int escapedash = 0;
     int arg;
@@ -768,7 +778,7 @@ static int readArguments(int argc, char **argv)
 		    int si = (int)(sip - onceflags);
 		    if (seen[si])
 		    {
-			if (optArg(needargs, &naidx, o, &errstr) < 0)
+			if (optArg(self, needargs, &naidx, o, &errstr) < 0)
 			{
 			    usage(prgname, errstr);
 			    return -1;
@@ -786,11 +796,11 @@ static int readArguments(int argc, char **argv)
 			break;
 
 		    case 'R':
-			resolveHosts = 0;
+			self->resolveHosts = 0;
 			break;
 
 		    case 'f':
-			foreground = 1;
+			self->foreground = 1;
 			break;
 
 		    case 'h':
@@ -798,7 +808,7 @@ static int readArguments(int argc, char **argv)
 			return 1;
 
 		    case 'r':
-			resolveHosts = 1;
+			self->resolveHosts = 1;
 			break;
 
 		    case 'V':
@@ -806,11 +816,11 @@ static int readArguments(int argc, char **argv)
 			return 1;
 
 		    case 'v':
-			verbose = 1;
+			self->verbose = 1;
 			break;
 
 		    default:
-			if (optArg(needargs, &naidx, o, &errstr) < 0)
+			if (optArg(self, needargs, &naidx, o, &errstr) < 0)
 			{
 			    usage(prgname, errstr);
 			    return -1;
@@ -821,7 +831,7 @@ static int readArguments(int argc, char **argv)
 	}
 	else if (!escapedash && naidx)
 	{
-	    if (optArg(needargs, &naidx, o, &errstr) < 0)
+	    if (optArg(self, needargs, &naidx, o, &errstr) < 0)
 	    {
 		usage(prgname, errstr);
 		return -1;
@@ -842,36 +852,46 @@ next:	;
     return 0;
 }
 
-int Config_init(int argc, char **argv)
+Config *Config_create(int argc, char **argv)
 {
-    (void)argc;
-    (void)argv;
+    Config *self = PSC_malloc(sizeof *self);
+    memset(self, 0, sizeof *self);
+    self->uid = -1;
+    self->gid = -1;
+    self->resolveHosts = -1;
 
-    server = getServer(0);
-    int rc = readArguments(argc, argv);
-    if (!cfgfile) cfgfile = DEFCONFFILE;
-    return rc;
+    server = getServer(self, 0);
+    int rc = readArguments(self, argc, argv);
+    if (rc)
+    {
+	Config_destroy(self);
+	if (rc < 0) exit(EXIT_FAILURE);
+	else exit(EXIT_SUCCESS);
+    }
+    if (!self->cfgfile) self->cfgfile = DEFCONFFILE;
+    ++instcnt;
+    return self;
 }
 
-void Config_readConfigFile(void)
+void Config_readConfigFile(Config *self)
 {
-    FILE *f = fopen(cfgfile, "r");
+    FILE *f = fopen(self->cfgfile, "r");
     if (f)
     {
-	readConfigFile(f);
+	readConfigFile(self, f);
 	fclose(f);
     }
     else
     {
 	PSC_Log_fmt(PSC_L_WARNING, "config: Cannot open config file %s",
-		cfgfile);
+		self->cfgfile);
     }
 }
 
-const CfgChecker *Config_checker(size_t num)
+const CfgChecker *Config_checker(const Config *self, size_t num)
 {
-    if (num >= checkers_count) return 0;
-    return checkers[num];
+    if (num >= self->checkers_count) return 0;
+    return self->checkers[num];
 }
 
 const char *CfgChecker_name(const CfgChecker *self)
@@ -890,10 +910,10 @@ const char *CfgChecker_arg(const CfgChecker *self, size_t num)
     return self->args[num];
 }
 
-const CfgRealm *Config_realm(size_t num)
+const CfgRealm *Config_realm(const Config *self, size_t num)
 {
-    if (num >= realms_count) return 0;
-    return realms[num];
+    if (num >= self->realms_count) return 0;
+    return self->realms[num];
 }
 
 const char *CfgRealm_name(const CfgRealm *self)
@@ -916,10 +936,10 @@ int CfgRealm_loginFailLimit(const CfgRealm *self, size_t num,
     return 1;
 }
 
-const CfgServer *Config_server(size_t num)
+const CfgServer *Config_server(const Config *self, size_t num)
 {
-    if (num >= servers_count) return 0;
-    return servers[num];
+    if (num >= self->servers_count) return 0;
+    return self->servers[num];
 }
 
 const char *CfgServer_name(const CfgServer *self)
@@ -975,107 +995,110 @@ const PSC_IpAddr *CfgServer_nat64Prefix(const CfgServer *self)
     return nat64Prefix;
 }
 
-long Config_uid(void)
+long Config_uid(const Config *self)
 {
-    return uid;
+    return self->uid;
 }
 
-long Config_gid(void)
+long Config_gid(const Config *self)
 {
-    return gid;
+    return self->gid;
 }
 
-const char *Config_pidfile(void)
+const char *Config_pidfile(const Config *self)
 {
-    if (!pidfile) return DEFPIDFILE;
-    return pidfile;
+    if (!self->pidfile) return DEFPIDFILE;
+    return self->pidfile;
 }
 
-int Config_resolveHosts(void)
+int Config_resolveHosts(const Config *self)
 {
-    return resolveHosts < 0 ? 0 : resolveHosts;
+    return self->resolveHosts < 0 ? 0 : self->resolveHosts;
 }
 
-int Config_foreground(void)
+int Config_foreground(const Config *self)
 {
-    return foreground;
+    return self->foreground;
 }
 
-int Config_verbose(void)
+int Config_verbose(const Config *self)
 {
-    return verbose;
+    return self->verbose;
 }
 
-int Config_sessionLimit(size_t num, uint16_t *seconds, uint16_t *limit)
+int Config_sessionLimit(const Config *self,
+	size_t num, uint16_t *seconds, uint16_t *limit)
 {
-    if (num >= nsessionLimits) return 0;
-    *seconds = sessionSeconds[num];
-    *limit = sessionLimits[num];
+    if (num >= self->nsessionLimits) return 0;
+    *seconds = self->sessionSeconds[num];
+    *limit = self->sessionLimits[num];
     return 1;
 }
 
-int Config_loginFailLimit(size_t num, uint16_t *seconds, uint16_t *limit)
+int Config_loginFailLimit(const Config *self,
+	size_t num, uint16_t *seconds, uint16_t *limit)
 {
-    if (num >= nloginLimits) return 0;
-    *seconds = loginSeconds[num];
-    *limit = loginLimits[num];
+    if (num >= self->nloginLimits) return 0;
+    *seconds = self->loginSeconds[num];
+    *limit = self->loginLimits[num];
     return 1;
 }
 
-int Config_defaultThreads(void)
+int Config_defaultThreads(const Config *self)
 {
-    if (defaultThreads) return defaultThreads;
+    if (self->defaultThreads) return self->defaultThreads;
     return DEFNTHREADS;
 }
 
-int Config_threadsPerCpu(void)
+int Config_threadsPerCpu(const Config *self)
 {
-    if (threadsPerCpu) return threadsPerCpu;
+    if (self->threadsPerCpu) return self->threadsPerCpu;
     if (PSC_AsyncTask_awaitIsBlocking()) return DEFCPUNTHRBLOCK;
     return DEFCPUNTHR;
 }
 
-int Config_maxThreads(void)
+int Config_maxThreads(const Config *self)
 {
-    if (maxThreads) return maxThreads;
+    if (self->maxThreads) return self->maxThreads;
     return DEFMAXTHREADS;
 }
 
-int Config_jobQueuePerThread(void)
+int Config_jobQueuePerThread(const Config *self)
 {
-    if (jobQueuePerThread) return jobQueuePerThread;
+    if (self->jobQueuePerThread) return self->jobQueuePerThread;
     return DEFTHRJOBQUEUE;
 }
 
-int Config_maxJobQueue(void)
+int Config_maxJobQueue(const Config *self)
 {
-    if (maxJobQueue) return maxJobQueue;
+    if (self->maxJobQueue) return self->maxJobQueue;
     return DEFMAXJOBQUEUE;
 }
 
-const char *Config_loginRoute(void)
+const char *Config_loginRoute(const Config *self)
 {
-    if (!loginRoute) return "/login";
-    return loginRoute;
+    if (!self->loginRoute) return "/login";
+    return self->loginRoute;
 }
 
-const char *Config_staticRoute(void)
+const char *Config_staticRoute(const Config *self)
 {
-    if (!staticRoute) return "/login/static";
-    return staticRoute;
+    if (!self->staticRoute) return "/login/static";
+    return self->staticRoute;
 }
 
-const char *Config_resourceDir(void)
+const char *Config_resourceDir(const Config *self)
 {
-    if (!resourceDir) return DEFRESDIR;
-    return resourceDir;
+    if (!self->resourceDir) return DEFRESDIR;
+    return self->resourceDir;
 }
 
-void Config_done(void)
+void Config_destroy(Config *self)
 {
-    for (size_t i = 0; i < realms_count; ++i)
+    if (!self) return;
+    for (size_t i = 0; i < self->realms_count; ++i)
     {
-	CfgRealm *r = realms[i];
+	CfgRealm *r = self->realms[i];
 	for (size_t j = 0; j < r->ncheckers; ++j)
 	{
 	    free(r->checkers[j]);
@@ -1083,11 +1106,11 @@ void Config_done(void)
 	free(r->name);
 	free(r);
     }
-    free(realms);
+    free(self->realms);
 
-    for (size_t i = 0; i < checkers_count; ++i)
+    for (size_t i = 0; i < self->checkers_count; ++i)
     {
-	CfgChecker *c = checkers[i];
+	CfgChecker *c = self->checkers[i];
 	for (size_t j = 0; j < c->nargs; ++j)
 	{
 	    free(c->args[j]);
@@ -1095,11 +1118,11 @@ void Config_done(void)
 	free(c->name);
 	free(c);
     }
-    free(checkers);
+    free(self->checkers);
 
-    for (size_t i = 0; i < servers_count; ++i)
+    for (size_t i = 0; i < self->servers_count; ++i)
     {
-	CfgServer *s = servers[i];
+	CfgServer *s = self->servers[i];
 	for (size_t j = 0; j < s->nlisten; ++j)
 	{
 	    free(s->listen[j]);
@@ -1110,40 +1133,17 @@ void Config_done(void)
 	free(s->name);
 	free(s);
     }
-    free(servers);
-    free(cfg_pidfile);
-    free(resourceDir);
-    free(staticRoute);
-    free(loginRoute);
+    free(self->servers);
+    free(self->cfg_pidfile);
+    free(self->resourceDir);
+    free(self->staticRoute);
+    free(self->loginRoute);
+    free(self);
 
-    PSC_IpAddr_destroy(nat64Prefix);
-
-    realms_count = 0;
-    realms_capa = 0;
-    checkers_count = 0;
-    checkers_capa = 0;
-    servers_count = 0;
-    servers_capa = 0;
-    realms = 0;
-    checkers = 0;
-    servers = 0;
-    nat64Prefix = 0;
-    uid = -1;
-    gid = -1;
-    cfg_pidfile = 0;
-    pidfile = 0;
-    resolveHosts = -1;
-    foreground = 0;
-    verbose = 0;
-    defaultThreads = 0;
-    threadsPerCpu = 0;
-    maxThreads = 0;
-    jobQueuePerThread = 0;
-    maxJobQueue = 0;
-    nsessionLimits = 0;
-    nloginLimits = 0;
-    resourceDir = 0;
-    loginRoute = 0;
-    staticRoute = 0;
+    if (!--instcnt)
+    {
+	PSC_IpAddr_destroy(nat64Prefix);
+	nat64Prefix = 0;
+    }
 }
 

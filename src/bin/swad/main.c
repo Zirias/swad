@@ -37,6 +37,7 @@
 static size_t servers_capa;
 static size_t servers_count;
 static HttpServer **servers;
+static Config *cfg;
 
 static PSC_LogLevel logLevelFor(const HttpRequest *request, HttpStatus status)
 {
@@ -55,9 +56,9 @@ static void setupPipeline(HttpServer *server)
     HttpServer_addMiddleware(server, MW_FormData);
     HttpServer_addMiddleware(server, MW_CSRFProtect);
 
-    HttpServer_addRoute(server, Config_staticRoute(),
+    HttpServer_addRoute(server, Config_staticRoute(cfg),
 	    staticHandler, HTTP_GET, 0);
-    HttpServer_addRoute(server, Config_loginRoute(),
+    HttpServer_addRoute(server, Config_loginRoute(cfg),
 	    loginHandler, HTTP_GET|HTTP_POST, 0);
     HttpServer_addRoute(server, "/",
 	    rootHandler, HTTP_GET, 0);
@@ -66,23 +67,23 @@ static void setupPipeline(HttpServer *server)
 }
 
 #ifdef CRED_EXEC
-static CredentialsChecker *createExecChecker(const CfgChecker *cfg)
+static CredentialsChecker *createExecChecker(const CfgChecker *ccfg)
 {
     int timeout = 10000;
     int killtimeout = 5000;
     const char *path;
     long intarg;
 
-    const char *argstr = CfgChecker_arg(cfg, 0);
+    const char *argstr = CfgChecker_arg(ccfg, 0);
     if (!argstr)
     {
 	PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s will always fail: "
-		"missing argument `path' for `exec'", CfgChecker_name(cfg));
+		"missing argument `path' for `exec'", CfgChecker_name(ccfg));
 	return 0;
     }
     path = argstr;
 
-    argstr = CfgChecker_arg(cfg, 1);
+    argstr = CfgChecker_arg(ccfg, 1);
     if (argstr)
     {
 	errno = 0;
@@ -93,11 +94,11 @@ static CredentialsChecker *createExecChecker(const CfgChecker *cfg)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s: Invalid "
 		    "timeout value `%s', using default of 10000 ms",
-		    CfgChecker_name(cfg), argstr);
+		    CfgChecker_name(ccfg), argstr);
 	}
 	else timeout = intarg;
 
-	argstr = CfgChecker_arg(cfg, 2);
+	argstr = CfgChecker_arg(ccfg, 2);
 	if (argstr)
 	{
 	    errno = 0;
@@ -107,7 +108,7 @@ static CredentialsChecker *createExecChecker(const CfgChecker *cfg)
 	    {
 		PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s: Invalid "
 			"kill timeout value `%s', using default of 5000 ms",
-			CfgChecker_name(cfg), argstr);
+			CfgChecker_name(ccfg), argstr);
 	    }
 	    else killtimeout = intarg;
 	}
@@ -118,13 +119,13 @@ static CredentialsChecker *createExecChecker(const CfgChecker *cfg)
 #endif
 
 #ifdef CRED_POW
-static CredentialsChecker *createPowChecker(const CfgChecker *cfg)
+static CredentialsChecker *createPowChecker(const CfgChecker *ccfg)
 {
     unsigned difficulty = 4;
     const char *user = "guest";
     const char *password = "guest";
 
-    const char *argstr = CfgChecker_arg(cfg, 0);
+    const char *argstr = CfgChecker_arg(ccfg, 0);
     if (argstr)
     {
 	char *endp;
@@ -135,17 +136,17 @@ static CredentialsChecker *createPowChecker(const CfgChecker *cfg)
 	{
 	    PSC_Log_fmt(PSC_L_WARNING, "Credentials checker %s: Invalid "
 		    "difficulty value `%s', using default of 5",
-		    CfgChecker_name(cfg), argstr);
+		    CfgChecker_name(ccfg), argstr);
 	}
 	else difficulty = intarg;
 
-	argstr = CfgChecker_arg(cfg, 1);
+	argstr = CfgChecker_arg(ccfg, 1);
 	if (argstr)
 	{
 	    user = argstr;
 	    password = argstr;
 
-	    argstr = CfgChecker_arg(cfg, 2);
+	    argstr = CfgChecker_arg(ccfg, 2);
 	    if (argstr) password = argstr;
 	}
     }
@@ -162,19 +163,17 @@ static void prestartup(void *receiver, void *sender, void *args)
     PSC_EAStartup *ea = args;
 
     MW_FormData_setValidation(FDV_UTF8_SANITIZE);
+    loginHandler_setRoute(Config_loginRoute(cfg));
+    staticHandler_init(Config_resourceDir(cfg));
 
     uint16_t seconds;
     uint16_t limit;
-    for (size_t i = 0; Config_sessionLimit(i, &seconds, &limit); ++i)
+    for (size_t i = 0; Config_sessionLimit(cfg, i, &seconds, &limit); ++i)
     {
 	MW_SessionOpts_addLimit(seconds, limit);
     }
     MW_Session_init();
-
-    loginHandler_setRoute(Config_loginRoute());
-    staticHandler_init(Config_resourceDir());
-
-    for (size_t i = 0; Config_loginFailLimit(i, &seconds, &limit); ++i)
+    for (size_t i = 0; Config_loginFailLimit(cfg, i, &seconds, &limit); ++i)
     {
 	Authenticator_addDefaultLimit(seconds, limit);
     }
@@ -190,7 +189,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     const char *checkerClassName;
     const char *checkerBuildOpt;
 #endif
-    for (size_t i = 0; (c = Config_checker(i)); ++i)
+    for (size_t i = 0; (c = Config_checker(cfg, i)); ++i)
     {
 	switch (CfgChecker_class(c))
 	{
@@ -258,9 +257,9 @@ static void prestartup(void *receiver, void *sender, void *args)
     }
 
     const CfgRealm *r;
-    for (size_t i = 0; (r = Config_realm(i)); ++i)
+    for (size_t i = 0; (r = Config_realm(cfg, i)); ++i)
     {
-	Realm *realm = Realm_create(CfgRealm_name(r), Config_resourceDir());
+	Realm *realm = Realm_create(CfgRealm_name(r), Config_resourceDir(cfg));
 	const char *cname;
 	for (size_t j = 0; (cname = CfgRealm_checker(r, j)); ++j)
 	{
@@ -275,7 +274,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     }
 
     const CfgServer *s;
-    for (size_t i = 0; (s = Config_server(i)); ++i)
+    for (size_t i = 0; (s = Config_server(cfg, i)); ++i)
     {
 	HttpServerOpts *opts = HttpServerOpts_create(CfgServer_port(s));
 	const char *l;
@@ -289,7 +288,7 @@ static void prestartup(void *receiver, void *sender, void *args)
 		    CfgServer_tlsCert(s), CfgServer_tlsKey(s));
 	}
 	HttpServerOpts_setProto(opts, CfgServer_proto(s));
-	if (Config_resolveHosts()) HttpServerOpts_resolveHosts(opts);
+	if (Config_resolveHosts(cfg)) HttpServerOpts_resolveHosts(opts);
 	HttpServerOpts_trustedProxies(opts, CfgServer_trustedProxies(s));
 	HttpServerOpts_trustedHeader(opts, CfgServer_trustedHeader(s));
 	HttpServerOpts_nat64Prefix(opts, CfgServer_nat64Prefix(s));
@@ -336,28 +335,26 @@ static void shutdown(void *receiver, void *sender, void *args)
     staticHandler_done();
     Authenticator_done();
     MW_Session_done();
-    Config_done();
+    Config_destroy(cfg);
 }
 
 int main(int argc, char **argv)
 {
-    int rc = Config_init(argc, argv);
-    if (rc < 0) return EXIT_FAILURE;
-    if (rc > 0) return EXIT_SUCCESS;
-    PSC_Log_setMaxLogLevel(Config_verbose() ? PSC_L_DEBUG : PSC_L_INFO);
+    cfg = Config_create(argc, argv);
+    PSC_Log_setMaxLogLevel(Config_verbose(cfg) ? PSC_L_DEBUG : PSC_L_INFO);
     PSC_Log_setFileLogger(stderr);
-    Config_readConfigFile();
+    Config_readConfigFile(cfg);
 
-    PSC_ThreadOpts_init(Config_defaultThreads());
-    PSC_ThreadOpts_threadsPerCpu(Config_threadsPerCpu());
-    PSC_ThreadOpts_maxThreads(Config_maxThreads());
-    PSC_ThreadOpts_queuePerThread(Config_jobQueuePerThread());
-    PSC_ThreadOpts_maxQueue(Config_maxJobQueue());
+    PSC_ThreadOpts_init(Config_defaultThreads(cfg));
+    PSC_ThreadOpts_threadsPerCpu(Config_threadsPerCpu(cfg));
+    PSC_ThreadOpts_maxThreads(Config_maxThreads(cfg));
+    PSC_ThreadOpts_queuePerThread(Config_jobQueuePerThread(cfg));
+    PSC_ThreadOpts_maxQueue(Config_maxJobQueue(cfg));
 
-    PSC_RunOpts_init(Config_pidfile());
+    PSC_RunOpts_init(Config_pidfile(cfg));
     PSC_RunOpts_enableDefaultLogging("swad");
-    PSC_RunOpts_runas(Config_uid(), Config_gid());
-    if (Config_foreground()) PSC_RunOpts_foreground();
+    PSC_RunOpts_runas(Config_uid(cfg), Config_gid(cfg));
+    if (Config_foreground(cfg)) PSC_RunOpts_foreground();
     PSC_Event_register(PSC_Service_prestartup(), 0, prestartup, 0);
     PSC_Event_register(PSC_Service_shutdown(), 0, shutdown, 0);
     return PSC_Service_run();

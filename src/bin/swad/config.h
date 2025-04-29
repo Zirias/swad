@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+C_CLASS_DECL(Config);
 C_CLASS_DECL(CfgChecker);
 C_CLASS_DECL(CfgRealm);
 C_CLASS_DECL(CfgServer);
@@ -22,21 +23,21 @@ typedef enum CheckerClass
     CC_POW
 } CheckerClass;
 
-int Config_init(int argc, char **argv) ATTR_NONNULL((2));
-void Config_readConfigFile(void);
+Config *Config_create(int argc, char **argv) ATTR_NONNULL((2));
+void Config_readConfigFile(Config *self) CMETHOD;
 
-const CfgChecker *Config_checker(size_t num);
+const CfgChecker *Config_checker(const Config *self, size_t num) CMETHOD;
 const char *CfgChecker_name(const CfgChecker *self) CMETHOD ATTR_RETNONNULL;
 CheckerClass CfgChecker_class(const CfgChecker *self) CMETHOD;
 const char *CfgChecker_arg(const CfgChecker *self, size_t num) CMETHOD;
 
-const CfgRealm *Config_realm(size_t num);
+const CfgRealm *Config_realm(const Config *self, size_t num) CMETHOD;
 const char *CfgRealm_name(const CfgRealm *self) CMETHOD ATTR_RETNONNULL;
 const char *CfgRealm_checker(const CfgRealm *self, size_t num) CMETHOD;
 int CfgRealm_loginFailLimit(const CfgRealm *self, size_t num,
 	uint16_t *seconds, uint16_t *limit) CMETHOD;
 
-const CfgServer *Config_server(size_t num);
+const CfgServer *Config_server(const Config *self, size_t num) CMETHOD;
 const char *CfgServer_name(const CfgServer *self) CMETHOD;
 int CfgServer_port(const CfgServer *self) CMETHOD;
 const char *CfgServer_listen(const CfgServer *self, size_t num) CMETHOD;
@@ -49,23 +50,25 @@ ProxyHeader CfgServer_trustedHeader(const CfgServer *self) CMETHOD;
 const PSC_IpAddr *CfgServer_nat64Prefix(const CfgServer *self)
     CMETHOD ATTR_RETNONNULL;
 
-long Config_uid(void);
-long Config_gid(void);
-const char *Config_pidfile(void) ATTR_RETNONNULL;
-int Config_resolveHosts(void);
-int Config_foreground(void);
-int Config_verbose(void);
-int Config_sessionLimit(size_t num, uint16_t *seconds, uint16_t *limit);
-int Config_loginFailLimit(size_t num, uint16_t *seconds, uint16_t *limit);
-int Config_defaultThreads(void);
-int Config_threadsPerCpu(void);
-int Config_maxThreads(void);
-int Config_jobQueuePerThread(void);
-int Config_maxJobQueue(void);
-const char *Config_loginRoute(void) ATTR_RETNONNULL;
-const char *Config_staticRoute(void) ATTR_RETNONNULL;
-const char *Config_resourceDir(void) ATTR_RETNONNULL;
+long Config_uid(const Config *self) CMETHOD;
+long Config_gid(const Config *self) CMETHOD;
+const char *Config_pidfile(const Config *self) CMETHOD ATTR_RETNONNULL;
+int Config_resolveHosts(const Config *self) CMETHOD;
+int Config_foreground(const Config *self) CMETHOD;
+int Config_verbose(const Config *self) CMETHOD;
+int Config_sessionLimit(const Config *self,
+	size_t num, uint16_t *seconds, uint16_t *limit) CMETHOD;
+int Config_loginFailLimit(const Config *self,
+	size_t num, uint16_t *seconds, uint16_t *limit) CMETHOD;
+int Config_defaultThreads(const Config *self) CMETHOD;
+int Config_threadsPerCpu(const Config *self) CMETHOD;
+int Config_maxThreads(const Config *self) CMETHOD;
+int Config_jobQueuePerThread(const Config *self) CMETHOD;
+int Config_maxJobQueue(const Config *self) CMETHOD;
+const char *Config_loginRoute(const Config *self) CMETHOD ATTR_RETNONNULL;
+const char *Config_staticRoute(const Config *self) CMETHOD ATTR_RETNONNULL;
+const char *Config_resourceDir(const Config *self) CMETHOD ATTR_RETNONNULL;
 
-void Config_done(void);
+void Config_destroy(Config *self);
 
 #endif
