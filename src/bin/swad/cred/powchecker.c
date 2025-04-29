@@ -1,6 +1,7 @@
 #include "powchecker.h"
 
 #include "../authenticator.h"
+#include "../handler/static.h"
 #include "../http/httpcontext.h"
 #include "../http/httpresponse.h"
 #include "../mediatype.h"
@@ -38,17 +39,24 @@ static void deviate(void *obj, const Authenticator *auth, HttpContext *context)
     Session_setProp(Authenticator_session(auth), "_POW_CHALLENGE",
 	    challenge, free);
 
+    const char *path = PathParser_path(pathParser);
     char difficulty[8];
+    char stylelink[256];
+    char scriptlink[256];
     snprintf(difficulty, sizeof difficulty, "%u", self->difficulty);
+    staticHandler_link(stylelink, sizeof stylelink, path, "style.css");
+    staticHandler_link(scriptlink, sizeof scriptlink, path, "pow.mjs");
 
     Template *tmpl = Template_createStatic(tmpl_pow_html, tmpl_pow_html_sz);
     Template_setStaticVar(tmpl, "REALM", Authenticator_realm(auth), TF_HTML);
-    Template_setStaticVar(tmpl, "SELF", PathParser_path(pathParser), TF_NONE);
+    Template_setStaticVar(tmpl, "SELF", path, TF_NONE);
     Template_setStaticVar(tmpl, "CSRFNAME", CSRFProtect_name(), TF_NONE);
     Template_setStaticVar(tmpl, "CSRFTOKEN", csrfToken, TF_NONE);
     Template_setStaticVar(tmpl, "USER", self->user, TF_HTML);
     Template_setStaticVar(tmpl, "CHALLENGE", challenge, TF_NONE);
     Template_setStaticVar(tmpl, "DIFFICULTY", difficulty, TF_NONE);
+    Template_setStaticVar(tmpl, "STYLELINK", stylelink, TF_NONE);
+    Template_setStaticVar(tmpl, "SCRIPTLINK", scriptlink, TF_NONE);
     HttpResponse *response = HttpResponse_create(HTTP_OK, MT_HTML);
     HttpResponse_passTextBody(response, Template_process(tmpl));
     Template_destroy(tmpl);

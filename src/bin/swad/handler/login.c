@@ -12,6 +12,7 @@
 #include "../middleware/pathparser.h"
 #include "../middleware/session.h"
 #include "../template.h"
+#include "static.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -164,6 +165,9 @@ static void showForm(HttpContext *context, Session *session,
     Template_setStaticVar(tmpl, "CSRFTOKEN", csrfToken, TF_NONE);
     Template_setStaticVar(tmpl, "REALM", realm, TF_HTML);
     Template_setStaticVar(tmpl, "SELF", path, TF_NONE);
+    char stylelink[256];
+    staticHandler_link(stylelink, sizeof stylelink, path, "style.css");
+    Template_setStaticVar(tmpl, "STYLELINK", stylelink, TF_NONE);
     HttpResponse *response = HttpResponse_create(HTTP_OK, MT_HTML);
     HttpResponse_passTextBody(response, Template_process(tmpl));
     Template_destroy(tmpl);
