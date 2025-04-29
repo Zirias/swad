@@ -169,7 +169,7 @@ static void showForm(HttpContext *context, Session *session,
     staticHandler_link(stylelink, sizeof stylelink, path, "style.css");
     Template_setStaticVar(tmpl, "STYLELINK", stylelink, TF_NONE);
     HttpResponse *response = HttpResponse_create(HTTP_OK, MT_HTML);
-    HttpResponse_passTextBody(response, Template_process(tmpl));
+    HttpResponse_passTextBody(response, Template_processHtml(tmpl));
     Template_destroy(tmpl);
     HttpContext_setResponse(context, response);
 }

@@ -33,6 +33,7 @@ void Template_setStaticVar(Template *self,
 	const char *name, const char *val, TmplFilter filter)
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
 char *Template_process(const Template *self) CMETHOD ATTR_MALLOC;
+char *Template_processHtml(const Template *self) CMETHOD ATTR_MALLOC;
 void Template_destroy(Template *self);
 
 #endif

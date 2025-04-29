@@ -58,7 +58,7 @@ static void deviate(void *obj, const Authenticator *auth, HttpContext *context)
     Template_setStaticVar(tmpl, "STYLELINK", stylelink, TF_NONE);
     Template_setStaticVar(tmpl, "SCRIPTLINK", scriptlink, TF_NONE);
     HttpResponse *response = HttpResponse_create(HTTP_OK, MT_HTML);
-    HttpResponse_passTextBody(response, Template_process(tmpl));
+    HttpResponse_passTextBody(response, Template_processHtml(tmpl));
     Template_destroy(tmpl);
     HttpContext_setResponse(context, response);
 }

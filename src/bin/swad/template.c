@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L
+
 #include "template.h"
 
 #include "htmlescape.h"
@@ -8,6 +10,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #define OUTCHUNK 8192
 
@@ -140,7 +143,7 @@ static void processVar(TmplVar *var, char **out, size_t *outsz, size_t *outpos)
     }
 }
 
-char *Template_process(const Template *self)
+static char *process(const Template *self, int html)
 {
     char varnm[64];
     char *out = 0;
@@ -148,7 +151,21 @@ char *Template_process(const Template *self)
     size_t outpos = 0;
     size_t pos = 0;
     const char *tmpl = (const char *)(self->owned ? self->tmpl : self->stmpl);
-    while (pos < self->size)
+    size_t sz = self->size;
+    if (html)
+    {
+	while (*tmpl && (*tmpl == ' ' || *tmpl == '\t'
+		    || *tmpl == '\r' || *tmpl == '\n'))
+	{
+	    ++tmpl;
+	    --sz;
+	}
+	if (strncasecmp("<!doctype ", tmpl, sizeof "<!doctype"))
+	{
+	    appendstrlit(&out, &outsz, &outpos, OUTCHUNK, "<!DOCTYPE html>\n");
+	}
+    }
+    while (pos < sz)
     {
 	if (tmpl[pos] == '%' && pos+2 < self->size
 		&& tmpl[pos+1] == '%' && tmpl[pos+2] != '%')
@@ -185,6 +202,16 @@ char *Template_process(const Template *self)
     appendchr(&out, &outsz, &outpos, 1, 0);
     out = PSC_realloc(out, outsz);
     return out;
+}
+
+char *Template_process(const Template *self)
+{
+    return process(self, 0);
+}
+
+char *Template_processHtml(const Template *self)
+{
+    return process(self, 1);
 }
 
 void Template_destroy(Template *self)
