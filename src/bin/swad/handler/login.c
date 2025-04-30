@@ -66,6 +66,8 @@ static void doLogin(HttpContext *context, Session *session)
 	    status = HTTP_OK;
 	    rdr = authrdr;
 	    Session_setProp(session, SK_ERROR, 0, 0);
+	    Session_setProp(session, SK_AREALM, 0, 0);
+	    Session_setProp(session, SK_ARDR, 0, 0);
 	    PSC_Log_fmt(PSC_L_INFO, "login: %s logged in for %s",
 		    user, realm);
 	}
@@ -77,8 +79,6 @@ static void doLogin(HttpContext *context, Session *session)
 	}
 	else
 	{
-	    Session_setProp(session, SK_AREALM, PSC_copystr(realm), free);
-	    Session_setProp(session, SK_ARDR, PSC_copystr(authrdr), free);
 	    if (result == AR_BLOCKED)
 	    {
 		Session_setProp(session, SK_ERROR,
@@ -192,12 +192,9 @@ static const char *updateSession(HttpContext *context,
     }
     char *loginrealm = PSC_copystr(realm);
     Session_setProp(session, SK_REALM, loginrealm, free);
-    Session_setProp(session, SK_AREALM, 0, 0);
-
     const char *rdr = Session_getProp(session, SK_ARDR);
     if (!rdr) rdr = loginHandler_rdr(hdr, pathParser);
     Session_setProp(session, SK_RDR, PSC_copystr(rdr), free);
-    Session_setProp(session, SK_ARDR, 0, 0);
 
     return loginrealm;
 }

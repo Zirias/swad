@@ -55,14 +55,16 @@ which takes precedence if both are present:
 Both parameters are stored in the session. They are deleted when a new value
 is provided, or when an actual login is performed. For security reasons,
 the login endpoint ignores these parameters for the actual login request, but
-accepts them for rendering the login form.
+accepts them for rendering the login form. The auth endpoint ignores the
+redirect uri if the user is already authenticated.
 
 ### Endpoint details
 
 * `/`, method `GET`: Check current authentication.
   - response `200`: Returned if the user is authenticated for the given realm.
     Returns a `text/plain` document containing the user name and, if
-    available, the user's real name in a second line.
+    available, the user's real name in a second line. Ignores the redirect uri
+    parameter described above.
   - response `403`: Returned if the user is not yet authenticated for the
     given realm. Returns a `text/html` document with a redirect to the login
     route.
