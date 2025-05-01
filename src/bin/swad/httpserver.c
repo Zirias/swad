@@ -48,6 +48,7 @@ struct HttpServer
     size_t routescapa;
     size_t middlewarescount;
     size_t middlewarescapa;
+    size_t nconn;
     ProxyHeader trustedHeader;
     int trustedProxies;
     int resolveHosts;
@@ -64,6 +65,7 @@ struct HttpServerOpts
 
 typedef struct ConnectionContext
 {
+    HttpServer *server;
     PSC_Timer *timer;
     PSC_ThreadJob *job;
 } ConnectionContext;
@@ -90,7 +92,8 @@ typedef struct LogRecord
     LogRecordState state;
 } LogRecord;
 
-static ConnectionContext *createContext(PSC_Connection *conn);
+static ConnectionContext *createContext(HttpServer *self,
+	PSC_Connection *conn);
 static void destroyContext(void *ctx);
 static void connActive(void *receiver, void *sender, void *args);
 static void connTimeout(void *receiver, void *sender, void *args);
@@ -243,15 +246,17 @@ static void createLogRecord(HttpServer *self, HttpContext *context)
     HttpContext_set(context, CTXLOGKEY, record, 0);
 }
 
-static ConnectionContext *createContext(PSC_Connection *conn)
+static ConnectionContext *createContext(HttpServer *self, PSC_Connection *conn)
 {
-    ConnectionContext *self = PSC_malloc(sizeof *self);
-    self->timer = PSC_Timer_create();
-    self->job = 0;
-    PSC_Timer_setMs(self->timer, CONNTIMEOUT * 1000U);
-    PSC_Timer_start(self->timer, 0);
-    PSC_Event_register(PSC_Timer_expired(self->timer), conn, connTimeout, 0);
-    return self;
+    ConnectionContext *ctx = PSC_malloc(sizeof *ctx);
+    ctx->server = self;
+    ctx->timer = PSC_Timer_create();
+    ctx->job = 0;
+    PSC_Timer_setMs(ctx->timer, CONNTIMEOUT * 1000U);
+    PSC_Timer_start(ctx->timer, 0);
+    PSC_Event_register(PSC_Timer_expired(ctx->timer), conn, connTimeout, 0);
+    ++ctx->server->nconn;
+    return ctx;
 }
 
 static void destroyContext(void *ctx)
@@ -259,6 +264,10 @@ static void destroyContext(void *ctx)
     if (!ctx) return;
     ConnectionContext *self = ctx;
     PSC_Timer_destroy(self->timer);
+    if (!--self->server->nconn && !self->server->server)
+    {
+	HttpServer_destroy(self->server);
+    }
     free(self);
 }
 
@@ -523,7 +532,8 @@ static void tcpClientConnected(void *receiver, void *sender, void *args)
 	    self, connActive, 0);
     PSC_Event_register(PSC_Connection_dataSent(client), self, connActive, 0);
     PSC_Event_register(PSC_Connection_closed(client), self, connClosed, 0);
-    PSC_Connection_setData(client, createContext(client), destroyContext);
+    PSC_Connection_setData(client,
+	    createContext(self, client), destroyContext);
     HttpRequest *req = HttpRequest_create(client);
     PSC_Event_register(HttpRequest_received(req), self, requestReceived, 0);
 }
@@ -598,6 +608,7 @@ HttpServer *HttpServer_create(const HttpServerOpts *opts)
     self->routescapa = ROUTESCHUNK;
     self->middlewarescount = 0;
     self->middlewarescapa = MIDDLEWARESCHUNK;
+    self->nconn = 0;
     self->trustedHeader = opts->trustedHeader;
     self->trustedProxies = opts->trustedProxies;
     self->resolveHosts = opts->resolveHosts;
@@ -649,6 +660,18 @@ void HttpServer_addMiddleware(HttpServer *self, HttpHandler handler)
 void HttpServer_setLogLevelCallback(HttpServer *self, LogLevelCallback cb)
 {
     self->loglevel = cb;
+}
+
+void HttpServer_shutdown(HttpServer *self)
+{
+    if (!self) return;
+    if (!self->nconn)
+    {
+	HttpServer_destroy(self);
+	return;
+    }
+    PSC_Server_shutdown(self->server, 0);
+    self->server = 0;
 }
 
 void HttpServer_destroy(HttpServer *self)

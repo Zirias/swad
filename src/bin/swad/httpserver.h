@@ -48,6 +48,7 @@ void HttpServer_addMiddleware(HttpServer *self, HttpHandler handler)
     CMETHOD ATTR_NONNULL((2));
 void HttpServer_setLogLevelCallback(HttpServer *self, LogLevelCallback cb)
     CMETHOD;
+void HttpServer_shutdown(HttpServer *self);
 void HttpServer_destroy(HttpServer *self);
 
 #endif

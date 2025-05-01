@@ -198,7 +198,7 @@ static HttpServer *createServer(const CfgServer *s)
 
 static void destroyServer(void *obj)
 {
-    HttpServer_destroy(obj);
+    HttpServer_shutdown(obj);
 }
 
 static void serverAdded(const CfgServer *news)
