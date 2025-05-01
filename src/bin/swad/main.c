@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L
+
 #include "authenticator.h"
 #include "config.h"
 #include "handler/login.h"
@@ -31,12 +33,21 @@
 
 #include <errno.h>
 #include <poser/core.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 
-static size_t servers_capa;
-static size_t servers_count;
-static HttpServer **servers;
+static void serverAdded(const CfgServer *news);
+static void serverRemoved(const CfgServer *olds);
+static void serverChanged(const CfgServer *news);
+
+static ConfigUpdateHandler cfgupdate = {
+    .serverAdded =	serverAdded,
+    .serverRemoved =	serverRemoved,
+    .serverChanged =	serverChanged
+};
+
+static PSC_HashTable *servers;
 static Config *cfg;
 
 static PSC_LogLevel logLevelFor(const HttpRequest *request, HttpStatus status)
@@ -154,6 +165,90 @@ static CredentialsChecker *createPowChecker(const CfgChecker *ccfg)
     return CredentialsChecker_createPow(difficulty, user, password);
 }
 #endif
+
+static HttpServerOpts *createServerOpts(const CfgServer *s)
+{
+    HttpServerOpts *opts = HttpServerOpts_create(CfgServer_port(s));
+    const char *l;
+    for (size_t j = 0; (l = CfgServer_listen(s, j)); ++j)
+    {
+	HttpServerOpts_bind(opts, l);
+    }
+    if (CfgServer_tls(s))
+    {
+	HttpServerOpts_enableTls(opts,
+		CfgServer_tlsCert(s), CfgServer_tlsKey(s));
+    }
+    HttpServerOpts_setProto(opts, CfgServer_proto(s));
+    if (Config_resolveHosts(cfg)) HttpServerOpts_resolveHosts(opts);
+    HttpServerOpts_trustedProxies(opts, CfgServer_trustedProxies(s));
+    HttpServerOpts_trustedHeader(opts, CfgServer_trustedHeader(s));
+    HttpServerOpts_nat64Prefix(opts, CfgServer_nat64Prefix(s));
+    return opts;
+}
+
+static HttpServer *createServer(const CfgServer *s)
+{
+    HttpServerOpts *opts = createServerOpts(s);
+    HttpServer *server = HttpServer_create(opts);
+    HttpServerOpts_destroy(opts);
+    if (server) setupPipeline(server);
+    return server;
+}
+
+static void destroyServer(void *obj)
+{
+    HttpServer_destroy(obj);
+}
+
+static void serverAdded(const CfgServer *news)
+{
+    HttpServer *server = createServer(news);
+    if (server)
+    {
+	const char *nm = CfgServer_name(news);
+	if (!nm) nm = "";
+	PSC_HashTable_set(servers, nm, server, destroyServer);
+    }
+}
+
+static void serverRemoved(const CfgServer *olds)
+{
+    const char *nm = CfgServer_name(olds);
+    if (!nm) nm = "";
+    PSC_HashTable_delete(servers, nm);
+}
+
+static void serverChanged(const CfgServer *news)
+{
+    const char *nm = CfgServer_name(news);
+    if (!nm) nm = "";
+    HttpServer *server = PSC_HashTable_get(servers, nm);
+    if (!server)
+    {
+	serverAdded(news);
+	return;
+    }
+
+    HttpServerOpts *opts = createServerOpts(news);
+    if (HttpServer_configure(server, opts) < 0)
+    {
+	PSC_HashTable_delete(servers, nm);
+	server = HttpServer_create(opts);
+	if (server)
+	{
+	    setupPipeline(server);
+	    PSC_HashTable_set(servers, nm, server, destroyServer);
+	}
+    }
+    HttpServerOpts_destroy(opts);
+}
+
+static void reloadConfig(int signo)
+{
+    (void)signo;
+    Config_reread(cfg, &cfgupdate);
+}
 
 static void prestartup(void *receiver, void *sender, void *args)
 {
@@ -276,33 +371,13 @@ static void prestartup(void *receiver, void *sender, void *args)
     const CfgServer *s;
     for (size_t i = 0; (s = Config_server(cfg, i)); ++i)
     {
-	HttpServerOpts *opts = HttpServerOpts_create(CfgServer_port(s));
-	const char *l;
-	for (size_t j = 0; (l = CfgServer_listen(s, j)); ++j)
-	{
-	    HttpServerOpts_bind(opts, l);
-	}
-	if (CfgServer_tls(s))
-	{
-	    HttpServerOpts_enableTls(opts,
-		    CfgServer_tlsCert(s), CfgServer_tlsKey(s));
-	}
-	HttpServerOpts_setProto(opts, CfgServer_proto(s));
-	if (Config_resolveHosts(cfg)) HttpServerOpts_resolveHosts(opts);
-	HttpServerOpts_trustedProxies(opts, CfgServer_trustedProxies(s));
-	HttpServerOpts_trustedHeader(opts, CfgServer_trustedHeader(s));
-	HttpServerOpts_nat64Prefix(opts, CfgServer_nat64Prefix(s));
-	HttpServer *server = HttpServer_create(opts);
-	HttpServerOpts_destroy(opts);
+	HttpServer *server = createServer(s);
 	if (server)
 	{
-	    setupPipeline(server);
-	    if (servers_count == servers_capa)
-	    {
-		servers_capa += 8;
-		servers = PSC_realloc(servers, servers_capa * sizeof *servers);
-	    }
-	    servers[servers_count++] = server;
+	    if (!servers) servers = PSC_HashTable_create(5);
+	    const char *nm = CfgServer_name(s);
+	    if (!nm) nm = "";
+	    PSC_HashTable_set(servers, nm, server, destroyServer);
 	}
 	else
 	{
@@ -312,11 +387,12 @@ static void prestartup(void *receiver, void *sender, void *args)
 	    else PSC_Log_msg(PSC_L_WARNING, "Could not create default server");
 	}
     }
-    if (!servers_count)
+    if (!servers)
     {
 	PSC_Log_msg(PSC_L_ERROR, "Could not create any servers");
 	PSC_EAStartup_return(ea, EXIT_FAILURE);
     }
+    else PSC_Service_registerSignal(SIGHUP, reloadConfig);
 }
 
 static void shutdown(void *receiver, void *sender, void *args)
@@ -325,11 +401,7 @@ static void shutdown(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    for (size_t i = 0; i < servers_count; ++i)
-    {
-	HttpServer_destroy(servers[i]);
-    }
-    free(servers);
+    PSC_HashTable_destroy(servers);
     servers = 0;
 
     staticHandler_done();

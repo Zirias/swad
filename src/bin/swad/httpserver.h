@@ -38,6 +38,8 @@ void HttpServerOpts_destroy(HttpServerOpts *self);
 
 HttpServer *HttpServer_create(const HttpServerOpts *opts)
     ATTR_NONNULL((1));
+int HttpServer_configure(HttpServer *self, const HttpServerOpts *opts)
+    CMETHOD ATTR_NONNULL((1));
 void HttpServer_addRoute(HttpServer *self, const char *prefix,
 	HttpHandler handler, HttpMethod methodMask,
 	HttpMethodCheck methodCheck)

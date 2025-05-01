@@ -608,6 +608,16 @@ HttpServer *HttpServer_create(const HttpServerOpts *opts)
     return self;
 }
 
+int HttpServer_configure(HttpServer *self, const HttpServerOpts *opts)
+{
+    if (PSC_Server_configureTcp(self->server, opts->serverOpts) < 0) return -1;
+    self->nat64Prefix = opts->nat64Prefix;
+    self->trustedHeader = opts->trustedHeader;
+    self->trustedProxies = opts->trustedProxies;
+    self->resolveHosts = opts->resolveHosts;
+    return 0;
+}
+
 void HttpServer_addRoute(HttpServer *self, const char *prefix,
 	HttpHandler handler, HttpMethod methodMask,
 	HttpMethodCheck methodCheck)

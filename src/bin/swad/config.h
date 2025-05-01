@@ -23,8 +23,17 @@ typedef enum CheckerClass
     CC_POW
 } CheckerClass;
 
+typedef struct ConfigUpdateHandler
+{
+    void (*serverAdded)(const CfgServer *news);
+    void (*serverRemoved)(const CfgServer *olds);
+    void (*serverChanged)(const CfgServer *news);
+} ConfigUpdateHandler;
+
 Config *Config_create(int argc, char **argv) ATTR_NONNULL((2));
 void Config_readConfigFile(Config *self) CMETHOD;
+void Config_reread(Config *self, ConfigUpdateHandler *handlers)
+    CMETHOD ATTR_NONNULL((1));
 
 const CfgChecker *Config_checker(const Config *self, size_t num) CMETHOD;
 const char *CfgChecker_name(const CfgChecker *self) CMETHOD ATTR_RETNONNULL;
