@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200112L
+#define _POSIX_C_SOURCE 200809L
 
 #include "static.h"
 
@@ -15,6 +15,7 @@
 #include <poser/core/base64.h>
 #include <poser/core/hash.h>
 #include <poser/core/util.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,6 +36,7 @@ static uint8_t *style_css_file;
 static char *style_css_filevers;
 static const uint8_t *style_css;
 static size_t style_css_sz;
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 static struct StaticFile files[] = {
 #ifdef CRED_POW
@@ -49,8 +51,12 @@ void staticHandler_init(const char *resdir)
 {
     char buf[1024];
     struct stat st;
+    pthread_mutex_lock(&lock);
+    free(style_css_filevers);
+    free(style_css_file);
+    style_css_file = 0;
     snprintf(buf, sizeof buf, "%s/style.css", resdir);
-    int fd = open(buf, O_RDONLY);
+    int fd = open(buf, O_RDONLY|O_CLOEXEC);
     if (fd < 0) goto skip;
     if (fstat(fd, &st) < 0) goto done;
     style_css_sz = st.st_size;
@@ -79,6 +85,7 @@ skip:
 	style_css = static_style_css;
 	style_css_sz = static_style_css_sz;
     }
+    pthread_mutex_unlock(&lock);
 }
 
 void staticHandler_done(void)
@@ -108,8 +115,10 @@ void staticHandler(HttpContext *context)
 	    if (!strcmp(files[i].path, path))
 	    {
 		response = HttpResponse_create(HTTP_OK, files[i].type);
+		pthread_mutex_lock(&lock);
 		HttpResponse_setBody(response, *files[i].content,
 			*files[i].contentsz);
+		pthread_mutex_unlock(&lock);
 		HeaderSet_set(HttpResponse_headers(response),
 			Header_create("Cache-Control",
 			    "public, max-age=31536000, immutable"));

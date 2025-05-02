@@ -345,8 +345,9 @@ static void reloadConfig(int signo)
 
     Authenticator_lockAndClear();
     Config_reread(cfg, &cfgupdate);
-    configureAuthenticator();
     loginHandler_setRoute(Config_loginRoute(cfg));
+    staticHandler_init(Config_resourceDir(cfg));
+    configureAuthenticator();
     Authenticator_unlock();
     configureSession();
 
