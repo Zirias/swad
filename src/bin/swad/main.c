@@ -37,14 +37,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void serverAdded(const CfgServer *news);
 static void serverRemoved(const CfgServer *olds);
-static void serverChanged(const CfgServer *news);
 
 static ConfigUpdateHandler cfgupdate = {
-    .serverAdded =	serverAdded,
-    .serverRemoved =	serverRemoved,
-    .serverChanged =	serverChanged
+    .serverRemoved =	serverRemoved
 };
 
 static PSC_HashTable *servers;
@@ -201,17 +197,6 @@ static void destroyServer(void *obj)
     HttpServer_shutdown(obj);
 }
 
-static void serverAdded(const CfgServer *news)
-{
-    HttpServer *server = createServer(news);
-    if (server)
-    {
-	const char *nm = CfgServer_name(news);
-	if (!nm) nm = "";
-	PSC_HashTable_set(servers, nm, server, destroyServer);
-    }
-}
-
 static void serverRemoved(const CfgServer *olds)
 {
     const char *nm = CfgServer_name(olds);
@@ -219,35 +204,37 @@ static void serverRemoved(const CfgServer *olds)
     PSC_HashTable_delete(servers, nm);
 }
 
-static void serverChanged(const CfgServer *news)
-{
-    const char *nm = CfgServer_name(news);
-    if (!nm) nm = "";
-    HttpServer *server = PSC_HashTable_get(servers, nm);
-    if (!server)
-    {
-	serverAdded(news);
-	return;
-    }
-
-    HttpServerOpts *opts = createServerOpts(news);
-    if (HttpServer_configure(server, opts) < 0)
-    {
-	PSC_HashTable_delete(servers, nm);
-	server = HttpServer_create(opts);
-	if (server)
-	{
-	    setupPipeline(server);
-	    PSC_HashTable_set(servers, nm, server, destroyServer);
-	}
-    }
-    HttpServerOpts_destroy(opts);
-}
-
 static void reloadConfig(int signo)
 {
     (void)signo;
     Config_reread(cfg, &cfgupdate);
+
+    const CfgServer *s;
+    for (size_t i = 0; (s = Config_server(cfg, i)); ++i)
+    {
+	const char *nm = CfgServer_name(s);
+	if (!nm) nm = "";
+	HttpServer *server = PSC_HashTable_get(servers, nm);
+	if (!server)
+	{
+	    server = createServer(s);
+	    if (server) PSC_HashTable_set(servers, nm, server, destroyServer);
+	    return;
+	}
+
+	HttpServerOpts *opts = createServerOpts(s);
+	if (HttpServer_configure(server, opts) < 0)
+	{
+	    PSC_HashTable_delete(servers, nm);
+	    server = HttpServer_create(opts);
+	    if (server)
+	    {
+		setupPipeline(server);
+		PSC_HashTable_set(servers, nm, server, destroyServer);
+	    }
+	}
+	HttpServerOpts_destroy(opts);
+    }
 }
 
 static void prestartup(void *receiver, void *sender, void *args)

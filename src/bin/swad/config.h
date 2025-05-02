@@ -25,9 +25,8 @@ typedef enum CheckerClass
 
 typedef struct ConfigUpdateHandler
 {
-    void (*serverAdded)(const CfgServer *news);
     void (*serverRemoved)(const CfgServer *olds);
-    void (*serverChanged)(const CfgServer *news);
+    void (*checkerRemoved)(const CfgChecker *oldc);
 } ConfigUpdateHandler;
 
 Config *Config_create(int argc, char **argv) ATTR_NONNULL((2));

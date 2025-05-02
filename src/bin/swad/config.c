@@ -901,63 +901,6 @@ static void destroyServer(CfgServer *s)
     free(s);
 }
 
-static int serverEquals(const CfgServer *a, const CfgServer *b)
-{
-    if (a->nlisten != b->nlisten) return 0;
-    int listeneq = 1;
-    for (size_t i = 0; i < a->nlisten; ++i)
-    {
-	const char *lb = 0;
-	for (size_t j = 0; j < b->nlisten; ++j)
-	{
-	    if (!strcmp(a->listen[i], b->listen[j]))
-	    {
-		lb = b->listen[j];
-		break;
-	    }
-	}
-	if (!lb)
-	{
-	    listeneq = 0;
-	    break;
-	}
-    }
-    if (!listeneq) return 0;
-    for (size_t i = 0; i < b->nlisten; ++i)
-    {
-	const char *la = 0;
-	for (size_t j = 0; j < a->nlisten; ++j)
-	{
-	    if (!strcmp(b->listen[i], a->listen[j]))
-	    {
-		la = a->listen[j];
-		break;
-	    }
-	}
-	if (!la)
-	{
-	    listeneq = 0;
-	    break;
-	}
-    }
-    if (!listeneq) return 0;
-    if (a->tls != b->tls) return 0;
-    if (a->tls)
-    {
-	if (strcmp(a->tlsCert, b->tlsCert)) return 0;
-	if (strcmp(a->tlsKey, b->tlsKey)) return 0;
-    }
-    if (a->nat64Prefix && !b->nat64Prefix) return 0;
-    if (!a->nat64Prefix && b->nat64Prefix) return 0;
-    if (a->nat64Prefix &&
-	    !PSC_IpAddr_equals(a->nat64Prefix, b->nat64Prefix)) return 0;
-    if (a->proto != b->proto) return 0;
-    if (a->trustedHeader != b->trustedHeader) return 0;
-    if (a->port != b->port) return 0;
-    if (a->trustedProxies != b->trustedProxies) return 0;
-    return 1;
-}
-
 void Config_reread(Config *self, ConfigUpdateHandler *handlers)
 {
     (void)handlers;
@@ -976,7 +919,6 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
     server = getServer(other, 0);
     readConfigFile(other, f);
 
-    int changeAllServers = other->resolveHosts != self->resolveHosts;
     self->resolveHosts = other->resolveHosts;
     for (size_t i = 0; i < self->servers_count; ++i)
     {
@@ -988,59 +930,19 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
 		     !strcmp(self->servers[i]->name, other->servers[j]->name)))
 	    {
 		os = other->servers[j];
-		if (changeAllServers || !serverEquals(self->servers[i], os))
-		{
-		    --other->servers_count;
-		    memmove(other->servers + j, other->servers + j + 1,
-			    other->servers_count * sizeof *other->servers);
-		    --j;
-		    destroyServer(self->servers[i]);
-		    self->servers[i] = os;
-		    if (handlers->serverChanged)
-		    {
-			handlers->serverChanged(os);
-		    }
-		}
 	    }
 	}
 	if (!os)
 	{
 	    CfgServer *rs = self->servers[i];
-	    --self->servers_count;
-	    memmove(self->servers + i, self->servers + i + 1,
-		    self->servers_count * sizeof *self->servers);
-	    --i;
 	    if (handlers->serverRemoved) handlers->serverRemoved(rs);
-	    destroyServer(rs);
 	}
+	destroyServer(self->servers[i]);
     }
-    for (size_t i = 0; i < other->servers_count; ++i)
-    {
-	CfgServer *os = 0;
-	for (size_t j = 0; j < self->servers_count; ++j)
-	{
-	    if ((!other->servers[i]->name && !self->servers[j]->name) ||
-		    (other->servers[i]->name && self->servers[j]->name &&
-		     !strcmp(other->servers[i]->name, self->servers[j]->name)))
-	    {
-		os = self->servers[j];
-		break;
-	    }
-	}
-	if (os) continue;
-	--other->servers_count;
-	memmove(other->servers + i, other->servers + i + 1,
-		other->servers_count * sizeof *other->servers);
-	--i;
-	if (self->servers_count == self->servers_capa)
-	{
-	    self->servers_capa += 8;
-	    self->servers = PSC_realloc(self->servers,
-		    self->servers_capa * sizeof *self->servers);
-	}
-	self->servers[self->servers_count++] = os;
-	if (handlers->serverAdded) handlers->serverAdded(os);
-    }
+    self->servers_count = other->servers_count;
+    memcpy(self->servers, other->servers,
+	    self->servers_count * sizeof *self->servers);
+    other->servers_count = 0;
 
     fclose(f);
     Config_destroy(other);
