@@ -903,7 +903,8 @@ static void destroyServer(CfgServer *s)
     free(s);
 }
 
-void Config_reread(Config *self, ConfigUpdateHandler *handlers)
+void Config_reread(Config *self, ConfigUpdateHandler *handlers,
+	ConfigUpdateData *data)
 {
     Config *other = PSC_malloc(sizeof *other);
     memset(other, 0, sizeof *other);
@@ -934,10 +935,10 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
 	    sizeof self->loginSeconds);
     memcpy(self->loginLimits, other->loginLimits,
 	    sizeof self->loginLimits);
-    free(self->loginRoute);
+    data->oldLoginRoute = self->loginRoute;
     self->loginRoute = other->loginRoute;
     other->loginRoute = 0;
-    free(self->staticRoute);
+    data->oldStaticRoute = self->staticRoute;
     self->staticRoute = other->staticRoute;
     other->staticRoute = 0;
     free(self->resourceDir);

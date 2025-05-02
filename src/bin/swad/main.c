@@ -340,11 +340,9 @@ static void reloadConfig(int signo)
 {
     (void)signo;
 
-    const char *oldLoginRoute = Config_loginRoute(cfg);
-    const char *oldStaticRoute = Config_staticRoute(cfg);
-
+    struct ConfigUpdateData data;
     Authenticator_lockAndClear();
-    Config_reread(cfg, &cfgupdate);
+    Config_reread(cfg, &cfgupdate, &data);
     loginHandler_setRoute(Config_loginRoute(cfg));
     staticHandler_init(Config_resourceDir(cfg));
     configureAuthenticator();
@@ -377,13 +375,16 @@ static void reloadConfig(int signo)
 	}
 	else
 	{
-	    HttpServer_updateRoute(server, oldLoginRoute, loginHandler,
+	    HttpServer_updateRoute(server, data.oldLoginRoute, loginHandler,
 		    Config_loginRoute(cfg));
-	    HttpServer_updateRoute(server, oldStaticRoute, staticHandler,
+	    HttpServer_updateRoute(server, data.oldStaticRoute, staticHandler,
 		    Config_staticRoute(cfg));
 	}
 	HttpServerOpts_destroy(opts);
     }
+
+    free(data.oldLoginRoute);
+    free(data.oldStaticRoute);
 }
 
 static void prestartup(void *receiver, void *sender, void *args)

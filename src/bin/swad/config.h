@@ -29,10 +29,17 @@ typedef struct ConfigUpdateHandler
     void (*realmRemoved)(const CfgRealm *oldr);
 } ConfigUpdateHandler;
 
+typedef struct ConfigUpdateData
+{
+    char *oldLoginRoute;
+    char *oldStaticRoute;
+} ConfigUpdateData;
+
 Config *Config_create(int argc, char **argv) ATTR_NONNULL((2));
 void Config_readConfigFile(Config *self) CMETHOD;
-void Config_reread(Config *self, ConfigUpdateHandler *handlers)
-    CMETHOD ATTR_NONNULL((1));
+void Config_reread(Config *self, ConfigUpdateHandler *handlers,
+	ConfigUpdateData *data)
+    CMETHOD ATTR_NONNULL((1)) ATTR_NONNULL((2));
 
 const CfgChecker *Config_checker(const Config *self, size_t num) CMETHOD;
 const char *CfgChecker_name(const CfgChecker *self) CMETHOD ATTR_RETNONNULL;
