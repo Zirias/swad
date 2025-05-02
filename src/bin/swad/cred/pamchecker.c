@@ -30,8 +30,8 @@ static PSC_Process *pamProcess;
 static PSC_Connection *pamStdin;
 static PSC_Connection *pamStdout;
 static PSC_AsyncTask *currentTask;
-static unsigned refcnt;
 static PamLoginRequest req;
+static int shutdown;
 
 static void pamStdoutReceived(void *receiver, void *sender, void *args)
 {
@@ -90,7 +90,12 @@ static void pamHelperDone(void *receiver, void *sender, void *args)
 		"Child process exited with status %d", status);
     }
 
-    if (!refcnt) PSC_Service_shutdownUnlock();
+    if (shutdown)
+    {
+	shutdown = 0;
+	pthread_mutex_unlock(&pamLock);
+	PSC_Service_shutdownUnlock();
+    }
 }
 
 static void pipeClosed(void *receiver, void *sender, void *args)
@@ -101,6 +106,23 @@ static void pipeClosed(void *receiver, void *sender, void *args)
     PSC_Connection *conn = sender;
     if (conn == pamStdin) pamStdin = 0;
     else if (conn == pamStdout) pamStdout = 0;
+}
+
+static void shutdownPamProcess(void *receiver, void *sender, void *args)
+{
+    (void)receiver;
+    (void)sender;
+    (void)args;
+
+    pthread_mutex_lock(&pamLock);
+    if (!pamProcess || shutdown)
+    {
+	pthread_mutex_unlock(&pamLock);
+	return;
+    }
+    shutdown = 1;
+    PSC_Service_shutdownLock();
+    PSC_Connection_close(pamStdin, 0);
 }
 
 static void setPamStream(void *obj,
@@ -125,6 +147,7 @@ static void setPamStream(void *obj,
     return;
 
 startupComplete:
+    PSC_Event_register(PSC_Service_shutdown(), 0, shutdownPamProcess, 0);
     pthread_mutex_unlock(&pamLock);
     PSC_Log_msg(PSC_L_DEBUG, "pamchecker: Launched pam helper "
 	    LIBEXECDIR "/swad_pam");
@@ -134,13 +157,11 @@ startupComplete:
 static void createProcess(void)
 {
     pthread_mutex_lock(&pamLock);
-    if (refcnt)
+    if (pamProcess)
     {
-	if (pamProcess) ++refcnt;
 	pthread_mutex_unlock(&pamLock);
 	return;
     }
-    refcnt = 1;
     PSC_ProcessOpts *opts = PSC_ProcessOpts_create();
     PSC_ProcessOpts_setName(opts, "swad: pam helper");
     PSC_ProcessOpts_streamAction(opts, PSC_ST_STDIN, PSC_SA_PIPE);
@@ -157,13 +178,6 @@ static void destroyChecker(void *obj)
     PamChecker *self = obj;
     free(self->service);
     free(self);
-    pthread_mutex_lock(&pamLock);
-    if (pamProcess && !--refcnt)
-    {
-	if (pamStdin) PSC_Connection_close(pamStdin, 0);
-	PSC_Service_shutdownLock();
-    }
-    pthread_mutex_unlock(&pamLock);
 }
 
 static void checkAsync(PSC_AsyncTask *task)
