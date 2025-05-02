@@ -417,6 +417,18 @@ void Authenticator_registerRealm(Realm *realm)
     PSC_HashTable_set(realms, realm->name, realm, deleteRealm);
 }
 
+void Authenticator_lockAndClear(void)
+{
+    pthread_mutex_lock(&authlock);
+    PSC_HashTable_destroy(checkers);
+    checkers = PSC_HashTable_create(4);
+}
+
+void Authenticator_unlock(void)
+{
+    pthread_mutex_unlock(&authlock);
+}
+
 void Authenticator_done(void)
 {
     pthread_mutex_destroy(&authlock);

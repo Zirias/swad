@@ -920,6 +920,7 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
     readConfigFile(other, f);
 
     self->resolveHosts = other->resolveHosts;
+
     for (size_t i = 0; i < self->servers_count; ++i)
     {
 	CfgServer *os = 0;
@@ -937,12 +938,27 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
 	    CfgServer *rs = self->servers[i];
 	    if (handlers->serverRemoved) handlers->serverRemoved(rs);
 	}
-	destroyServer(self->servers[i]);
     }
-    self->servers_count = other->servers_count;
-    memcpy(self->servers, other->servers,
-	    self->servers_count * sizeof *self->servers);
-    other->servers_count = 0;
+
+    size_t newcount = other->servers_count;
+    size_t newcapa = other->servers_capa;
+    void *newlist = other->servers;
+    other->servers_count = self->servers_count;
+    other->servers_capa = self->servers_capa;
+    other->servers = self->servers;
+    self->servers_count = newcount;
+    self->servers_capa = newcapa;
+    self->servers = newlist;
+
+    newcount = other->checkers_count;
+    newcapa = other->checkers_capa;
+    newlist = other->checkers;
+    other->checkers_count = self->checkers_count;
+    other->checkers_capa = self->checkers_capa;
+    other->checkers = self->checkers;
+    self->checkers_count = newcount;
+    self->checkers_capa = newcapa;
+    self->checkers = newlist;
 
     fclose(f);
     Config_destroy(other);

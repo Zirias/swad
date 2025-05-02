@@ -162,105 +162,8 @@ static CredentialsChecker *createPowChecker(const CfgChecker *ccfg)
 }
 #endif
 
-static HttpServerOpts *createServerOpts(const CfgServer *s)
+static void configureCheckers(void)
 {
-    HttpServerOpts *opts = HttpServerOpts_create(CfgServer_port(s));
-    const char *l;
-    for (size_t j = 0; (l = CfgServer_listen(s, j)); ++j)
-    {
-	HttpServerOpts_bind(opts, l);
-    }
-    if (CfgServer_tls(s))
-    {
-	HttpServerOpts_enableTls(opts,
-		CfgServer_tlsCert(s), CfgServer_tlsKey(s));
-    }
-    HttpServerOpts_setProto(opts, CfgServer_proto(s));
-    if (Config_resolveHosts(cfg)) HttpServerOpts_resolveHosts(opts);
-    HttpServerOpts_trustedProxies(opts, CfgServer_trustedProxies(s));
-    HttpServerOpts_trustedHeader(opts, CfgServer_trustedHeader(s));
-    HttpServerOpts_nat64Prefix(opts, CfgServer_nat64Prefix(s));
-    return opts;
-}
-
-static HttpServer *createServer(const CfgServer *s)
-{
-    HttpServerOpts *opts = createServerOpts(s);
-    HttpServer *server = HttpServer_create(opts);
-    HttpServerOpts_destroy(opts);
-    if (server) setupPipeline(server);
-    return server;
-}
-
-static void destroyServer(void *obj)
-{
-    HttpServer_shutdown(obj);
-}
-
-static void serverRemoved(const CfgServer *olds)
-{
-    const char *nm = CfgServer_name(olds);
-    if (!nm) nm = "";
-    PSC_HashTable_delete(servers, nm);
-}
-
-static void reloadConfig(int signo)
-{
-    (void)signo;
-    Config_reread(cfg, &cfgupdate);
-
-    const CfgServer *s;
-    for (size_t i = 0; (s = Config_server(cfg, i)); ++i)
-    {
-	const char *nm = CfgServer_name(s);
-	if (!nm) nm = "";
-	HttpServer *server = PSC_HashTable_get(servers, nm);
-	if (!server)
-	{
-	    server = createServer(s);
-	    if (server) PSC_HashTable_set(servers, nm, server, destroyServer);
-	    return;
-	}
-
-	HttpServerOpts *opts = createServerOpts(s);
-	if (HttpServer_configure(server, opts) < 0)
-	{
-	    PSC_HashTable_delete(servers, nm);
-	    server = HttpServer_create(opts);
-	    if (server)
-	    {
-		setupPipeline(server);
-		PSC_HashTable_set(servers, nm, server, destroyServer);
-	    }
-	}
-	HttpServerOpts_destroy(opts);
-    }
-}
-
-static void prestartup(void *receiver, void *sender, void *args)
-{
-    (void)receiver;
-    (void)sender;
-
-    PSC_EAStartup *ea = args;
-
-    MW_FormData_setValidation(FDV_UTF8_SANITIZE);
-    loginHandler_setRoute(Config_loginRoute(cfg));
-    staticHandler_init(Config_resourceDir(cfg));
-
-    uint16_t seconds;
-    uint16_t limit;
-    for (size_t i = 0; Config_sessionLimit(cfg, i, &seconds, &limit); ++i)
-    {
-	MW_SessionOpts_addLimit(seconds, limit);
-    }
-    MW_Session_init();
-    for (size_t i = 0; Config_loginFailLimit(cfg, i, &seconds, &limit); ++i)
-    {
-	Authenticator_addDefaultLimit(seconds, limit);
-    }
-    Authenticator_init();
-
     const CfgChecker *c;
 #if defined(CRED_EXEC) || defined(CRED_FILE) \
     || defined(CRED_PAM) || defined(CRED_POW)
@@ -337,6 +240,111 @@ static void prestartup(void *receiver, void *sender, void *args)
 #endif
 	}
     }
+}
+
+static HttpServerOpts *createServerOpts(const CfgServer *s)
+{
+    HttpServerOpts *opts = HttpServerOpts_create(CfgServer_port(s));
+    const char *l;
+    for (size_t j = 0; (l = CfgServer_listen(s, j)); ++j)
+    {
+	HttpServerOpts_bind(opts, l);
+    }
+    if (CfgServer_tls(s))
+    {
+	HttpServerOpts_enableTls(opts,
+		CfgServer_tlsCert(s), CfgServer_tlsKey(s));
+    }
+    HttpServerOpts_setProto(opts, CfgServer_proto(s));
+    if (Config_resolveHosts(cfg)) HttpServerOpts_resolveHosts(opts);
+    HttpServerOpts_trustedProxies(opts, CfgServer_trustedProxies(s));
+    HttpServerOpts_trustedHeader(opts, CfgServer_trustedHeader(s));
+    HttpServerOpts_nat64Prefix(opts, CfgServer_nat64Prefix(s));
+    return opts;
+}
+
+static HttpServer *createServer(const CfgServer *s)
+{
+    HttpServerOpts *opts = createServerOpts(s);
+    HttpServer *server = HttpServer_create(opts);
+    HttpServerOpts_destroy(opts);
+    if (server) setupPipeline(server);
+    return server;
+}
+
+static void destroyServer(void *obj)
+{
+    HttpServer_shutdown(obj);
+}
+
+static void serverRemoved(const CfgServer *olds)
+{
+    const char *nm = CfgServer_name(olds);
+    if (!nm) nm = "";
+    PSC_HashTable_delete(servers, nm);
+}
+
+static void reloadConfig(int signo)
+{
+    (void)signo;
+    Config_reread(cfg, &cfgupdate);
+
+    const CfgServer *s;
+    for (size_t i = 0; (s = Config_server(cfg, i)); ++i)
+    {
+	const char *nm = CfgServer_name(s);
+	if (!nm) nm = "";
+	HttpServer *server = PSC_HashTable_get(servers, nm);
+	if (!server)
+	{
+	    server = createServer(s);
+	    if (server) PSC_HashTable_set(servers, nm, server, destroyServer);
+	    return;
+	}
+
+	HttpServerOpts *opts = createServerOpts(s);
+	if (HttpServer_configure(server, opts) < 0)
+	{
+	    PSC_HashTable_delete(servers, nm);
+	    server = HttpServer_create(opts);
+	    if (server)
+	    {
+		setupPipeline(server);
+		PSC_HashTable_set(servers, nm, server, destroyServer);
+	    }
+	}
+	HttpServerOpts_destroy(opts);
+    }
+
+    Authenticator_lockAndClear();
+    configureCheckers();
+    Authenticator_unlock();
+}
+
+static void prestartup(void *receiver, void *sender, void *args)
+{
+    (void)receiver;
+    (void)sender;
+
+    PSC_EAStartup *ea = args;
+
+    MW_FormData_setValidation(FDV_UTF8_SANITIZE);
+    loginHandler_setRoute(Config_loginRoute(cfg));
+    staticHandler_init(Config_resourceDir(cfg));
+
+    uint16_t seconds;
+    uint16_t limit;
+    for (size_t i = 0; Config_sessionLimit(cfg, i, &seconds, &limit); ++i)
+    {
+	MW_SessionOpts_addLimit(seconds, limit);
+    }
+    MW_Session_init();
+    for (size_t i = 0; Config_loginFailLimit(cfg, i, &seconds, &limit); ++i)
+    {
+	Authenticator_addDefaultLimit(seconds, limit);
+    }
+    Authenticator_init();
+    configureCheckers();
 
     const CfgRealm *r;
     for (size_t i = 0; (r = Config_realm(cfg, i)); ++i)

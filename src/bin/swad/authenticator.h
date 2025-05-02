@@ -69,6 +69,8 @@ void Authenticator_registerChecker(
 	const char *name, CredentialsChecker *checker)
     ATTR_NONNULL((1)) ATTR_NONNULL((2));
 void Authenticator_registerRealm(Realm *realm) ATTR_NONNULL((1));
+void Authenticator_lockAndClear(void);
+void Authenticator_unlock(void);
 void Authenticator_done(void);
 
 #endif
