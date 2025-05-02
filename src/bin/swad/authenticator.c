@@ -217,6 +217,10 @@ AuthResult Authenticator_silentLogin(Authenticator *self)
     {
 	const AuthInfo *otherInfo = PSC_HashTableIterator_current(i);
 	if (!otherInfo->user) continue;
+	const Realm *otherRealm = PSC_HashTable_get(realms,
+		PSC_HashTableIterator_key(i));
+	if (!otherRealm) continue;
+	if (otherInfo->version != otherRealm->version) continue;
 	while (PSC_ListIterator_moveNext(j))
 	{
 	    if (strcmp(otherInfo->user->checker,
