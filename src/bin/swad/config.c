@@ -1,10 +1,11 @@
-#define _POSIX_C_SOURCE 200112L
+#define _POSIX_C_SOURCE 200809L
 
 #include "config.h"
 #include "help.h"
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <grp.h>
 #include <poser/core/ipaddr.h>
 #include <poser/core/log.h>
@@ -15,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <unistd.h>
 
 #define ARGBUFSZ 8
 
@@ -903,14 +905,15 @@ static void destroyServer(CfgServer *s)
 
 void Config_reread(Config *self, ConfigUpdateHandler *handlers)
 {
-    (void)handlers;
     Config *other = PSC_malloc(sizeof *other);
     memset(other, 0, sizeof *other);
     other->resolveHosts = -1;
     other->cfgfile = self->cfgfile;
-    FILE *f = fopen(other->cfgfile, "r");
-    if (!f)
+    int fd = open(other->cfgfile, O_RDONLY|O_CLOEXEC);
+    FILE *f = 0;
+    if (fd < 0 || !(f = fdopen(fd, "r")))
     {
+	if (fd >= 0) close(fd);
 	PSC_Log_fmt(PSC_L_WARNING, "config: Cannot open config file %s",
 		other->cfgfile);
 	Config_destroy(other);
@@ -918,6 +921,7 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
     }
     server = getServer(other, 0);
     readConfigFile(other, f);
+    fclose(f);
 
     self->resolveHosts = other->resolveHosts;
 
@@ -931,6 +935,7 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
 		     !strcmp(self->servers[i]->name, other->servers[j]->name)))
 	    {
 		os = other->servers[j];
+		break;
 	    }
 	}
 	if (!os)
@@ -960,7 +965,6 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
     self->checkers_capa = newcapa;
     self->checkers = newlist;
 
-    fclose(f);
     Config_destroy(other);
 }
 
