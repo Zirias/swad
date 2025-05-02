@@ -9,10 +9,11 @@
 
 C_CLASS_DECL(Authenticator);
 C_CLASS_DECL(CredentialsChecker);
-C_CLASS_DECL(Realm);
 C_CLASS_DECL(User);
 
 C_CLASS_DECL(HttpContext);
+C_CLASS_DECL(PSC_List);
+C_CLASS_DECL(RateLimitOpts);
 C_CLASS_DECL(Session);
 
 typedef enum AuthResult
@@ -57,19 +58,16 @@ void Authenticator_destroy(Authenticator *self);
 const char *User_username(const User *self) CMETHOD ATTR_RETNONNULL;
 const char *User_realname(const User *self) CMETHOD;
 
-Realm *Realm_create(const char *name, const char *tmplPath)
-    ATTR_NONNULL((1)) ATTR_NONNULL((2));
-void Realm_addChecker(Realm *self, const char *checker)
-    CMETHOD ATTR_NONNULL((1));
-void Realm_addLimit(Realm *self, uint16_t seconds, uint16_t limit) CMETHOD;
-
 void Authenticator_init(void);
-void Authenticator_addDefaultLimit(uint16_t seconds, uint16_t limit);
+void Authenticator_setDefaultLimit(RateLimitOpts *limitOpts);
 void Authenticator_registerChecker(
 	const char *name, CredentialsChecker *checker)
     ATTR_NONNULL((1)) ATTR_NONNULL((2));
-void Authenticator_registerRealm(Realm *realm) ATTR_NONNULL((1));
+void Authenticator_registerRealm(const char *name, const char *tmplPath,
+	PSC_List *checkers, RateLimitOpts *limitOpts)
+    ATTR_NONNULL((1)) ATTR_NONNULL((2)) ATTR_NONNULL((3));
 void Authenticator_lockAndClear(void);
+void Authenticator_removeRealm(const char *name) ATTR_NONNULL((1));
 void Authenticator_unlock(void);
 void Authenticator_done(void);
 

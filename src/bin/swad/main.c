@@ -14,6 +14,7 @@
 #include "middleware/formdata.h"
 #include "middleware/pathparser.h"
 #include "middleware/session.h"
+#include "ratelimit.h"
 
 #ifdef CRED_EXEC
 #  include "cred/execchecker.h"
@@ -38,9 +39,11 @@
 #include <string.h>
 
 static void serverRemoved(const CfgServer *olds);
+static void realmRemoved(const CfgRealm *oldr);
 
 static ConfigUpdateHandler cfgupdate = {
-    .serverRemoved =	serverRemoved
+    .serverRemoved =	serverRemoved,
+    .realmRemoved =	realmRemoved
 };
 
 static PSC_HashTable *servers;
@@ -162,8 +165,19 @@ static CredentialsChecker *createPowChecker(const CfgChecker *ccfg)
 }
 #endif
 
-static void configureCheckers(void)
+static void configureAuthenticator(void)
 {
+    RateLimitOpts *limitOpts = 0;
+    uint16_t seconds;
+    uint16_t limit;
+    for (size_t i = 0; Config_loginFailLimit(cfg, i, &seconds, &limit); ++i)
+    {
+	if (!limitOpts) limitOpts = RateLimitOpts_create(0);
+	RateLimitOpts_addLimit(limitOpts, seconds, limit);
+    }
+    Authenticator_setDefaultLimit(limitOpts);
+    limitOpts = 0;
+
     const CfgChecker *c;
 #if defined(CRED_EXEC) || defined(CRED_FILE) \
     || defined(CRED_PAM) || defined(CRED_POW)
@@ -240,6 +254,26 @@ static void configureCheckers(void)
 #endif
 	}
     }
+
+    const CfgRealm *r;
+    for (size_t i = 0; (r = Config_realm(cfg, i)); ++i)
+    {
+	PSC_List *checkerNames = PSC_List_create();
+	const char *cname;
+	for (size_t j = 0; (cname = CfgRealm_checker(r, j)); ++j)
+	{
+	    PSC_List_append(checkerNames, PSC_copystr(cname), free);
+	}
+	for (size_t j = 0;
+		CfgRealm_loginFailLimit(r, j, &seconds, &limit); ++j)
+	{
+	    if (!limitOpts) limitOpts = RateLimitOpts_create(0);
+	    RateLimitOpts_addLimit(limitOpts, seconds, limit);
+	}
+	Authenticator_registerRealm(CfgRealm_name(r),
+		Config_resourceDir(cfg), checkerNames, limitOpts);
+	limitOpts = 0;
+    }
 }
 
 static HttpServerOpts *createServerOpts(const CfgServer *s)
@@ -277,6 +311,11 @@ static void destroyServer(void *obj)
     HttpServer_shutdown(obj);
 }
 
+static void realmRemoved(const CfgRealm *oldr)
+{
+    Authenticator_removeRealm(CfgRealm_name(oldr));
+}
+
 static void serverRemoved(const CfgServer *olds)
 {
     const char *nm = CfgServer_name(olds);
@@ -287,7 +326,11 @@ static void serverRemoved(const CfgServer *olds)
 static void reloadConfig(int signo)
 {
     (void)signo;
+
+    Authenticator_lockAndClear();
     Config_reread(cfg, &cfgupdate);
+    configureAuthenticator();
+    Authenticator_unlock();
 
     const CfgServer *s;
     for (size_t i = 0; (s = Config_server(cfg, i)); ++i)
@@ -315,10 +358,6 @@ static void reloadConfig(int signo)
 	}
 	HttpServerOpts_destroy(opts);
     }
-
-    Authenticator_lockAndClear();
-    configureCheckers();
-    Authenticator_unlock();
 }
 
 static void prestartup(void *receiver, void *sender, void *args)
@@ -339,29 +378,9 @@ static void prestartup(void *receiver, void *sender, void *args)
 	MW_SessionOpts_addLimit(seconds, limit);
     }
     MW_Session_init();
-    for (size_t i = 0; Config_loginFailLimit(cfg, i, &seconds, &limit); ++i)
-    {
-	Authenticator_addDefaultLimit(seconds, limit);
-    }
-    Authenticator_init();
-    configureCheckers();
 
-    const CfgRealm *r;
-    for (size_t i = 0; (r = Config_realm(cfg, i)); ++i)
-    {
-	Realm *realm = Realm_create(CfgRealm_name(r), Config_resourceDir(cfg));
-	const char *cname;
-	for (size_t j = 0; (cname = CfgRealm_checker(r, j)); ++j)
-	{
-	    Realm_addChecker(realm, cname);
-	}
-	for (size_t j = 0;
-		CfgRealm_loginFailLimit(r, j, &seconds, &limit); ++j)
-	{
-	    Realm_addLimit(realm, seconds, limit);
-	}
-	Authenticator_registerRealm(realm);
-    }
+    Authenticator_init();
+    configureAuthenticator();
 
     const CfgServer *s;
     for (size_t i = 0; (s = Config_server(cfg, i)); ++i)

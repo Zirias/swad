@@ -945,6 +945,24 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
 	}
     }
 
+    for (size_t i = 0; i < self->realms_count; ++i)
+    {
+	CfgRealm *or = 0;
+	for (size_t j = 0; j < other->realms_count; ++j)
+	{
+	    if (!strcmp(self->realms[i]->name, other->realms[j]->name))
+	    {
+		or = other->realms[j];
+		break;
+	    }
+	}
+	if (!or)
+	{
+	    CfgRealm *rr = self->realms[i];
+	    if (handlers->realmRemoved) handlers->realmRemoved(rr);
+	}
+    }
+
     size_t newcount = other->servers_count;
     size_t newcapa = other->servers_capa;
     void *newlist = other->servers;
@@ -964,6 +982,16 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
     self->checkers_count = newcount;
     self->checkers_capa = newcapa;
     self->checkers = newlist;
+
+    newcount = other->realms_count;
+    newcapa = other->realms_capa;
+    newlist = other->realms;
+    other->realms_count = self->realms_count;
+    other->realms_capa = self->realms_capa;
+    other->realms = self->realms;
+    self->realms_count = newcount;
+    self->realms_capa = newcapa;
+    self->realms = newlist;
 
     Config_destroy(other);
 }

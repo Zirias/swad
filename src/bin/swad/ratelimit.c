@@ -173,6 +173,18 @@ void RateLimitOpts_addLimit(RateLimitOpts *self,
     l->ncounts = (seconds + l->res - 1) / l->res;
 }
 
+int RateLimitOpts_equals(const RateLimitOpts *self, const RateLimitOpts *other)
+{
+    if (self->locked != other->locked) return 0;
+    if (self->limits_count != other->limits_count) return 0;
+    for (size_t i = 0; i < self->limits_count; ++i)
+    {
+	if (self->limits[i].seconds != other->limits[i].seconds) return 0;
+	if (self->limits[i].limit != other->limits[i].limit) return 0;
+    }
+    return 1;
+}
+
 void RateLimitOpts_destroy(RateLimitOpts *self)
 {
     if (!self) return;

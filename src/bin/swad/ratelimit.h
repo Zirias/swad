@@ -14,6 +14,9 @@ void RateLimit_destroy(RateLimit *self);
 RateLimitOpts *RateLimitOpts_create(int locked) ATTR_RETNONNULL;
 void RateLimitOpts_addLimit(RateLimitOpts *self,
 	uint16_t seconds, uint16_t limit) CMETHOD;
+int RateLimitOpts_equals(
+	const RateLimitOpts *self, const RateLimitOpts *other)
+    CMETHOD ATTR_NONNULL((2));
 void RateLimitOpts_destroy(RateLimitOpts *self);
 
 #endif

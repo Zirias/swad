@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200112L
+#define _POSIX_C_SOURCE 200809L
 
 #include "authenticator.h"
 
@@ -21,7 +21,22 @@ typedef struct AuthInfo
     User *user;
     PSC_HashTable *blocks;
     RateLimit *failLimit;
+    unsigned version;
+    unsigned limitVersion;
 } AuthInfo;
+
+typedef struct Realm
+{
+    const char *name;
+    PSC_List *checkers;
+    RateLimitOpts *limitOpts;
+    uint8_t *t_login;
+    uint8_t *t_logout;
+    size_t t_login_sz;
+    size_t t_logout_sz;
+    unsigned version;
+    unsigned limitVersion;
+} Realm;
 
 struct Authenticator
 {
@@ -39,20 +54,10 @@ struct User
     const char *checker;
 };
 
-struct Realm
-{
-    const char *name;
-    PSC_List *checkers;
-    RateLimitOpts *limitOpts;
-    uint8_t *t_login;
-    uint8_t *t_logout;
-    size_t t_login_sz;
-    size_t t_logout_sz;
-};
-
 static PSC_HashTable *checkers;
 static PSC_HashTable *realms;
 static RateLimitOpts *defaultLimitOpts;
+static unsigned defLimitVersion;
 
 static pthread_mutex_t authlock;
 
@@ -135,6 +140,11 @@ Authenticator *Authenticator_create(Session *session, const char *realm)
 static AuthInfo *getAuthInfo(Authenticator *self, int create)
 {
     AuthInfo *authInfo = PSC_HashTable_get(self->authInfos, self->realmnm);
+    if (self->realm && authInfo && authInfo->version != self->realm->version)
+    {
+	PSC_HashTable_delete(self->authInfos, self->realmnm);
+	authInfo = 0;
+    }
     if (create && !authInfo)
     {
 	authInfo = PSC_malloc(sizeof *authInfo);
@@ -161,24 +171,30 @@ const char *Authenticator_realm(const Authenticator *self)
 
 const uint8_t *Authenticator_loginTmpl(const Authenticator *self, size_t *sz)
 {
+    const uint8_t *tmpl = tmpl_login_html;
+    pthread_mutex_lock(&authlock);
     if (self->realm && self->realm->t_login)
     {
 	*sz = self->realm->t_login_sz;
-	return self->realm->t_login;
+	tmpl = self->realm->t_login;
     }
-    *sz = tmpl_login_html_sz;
-    return tmpl_login_html;
+    else *sz = tmpl_login_html_sz;
+    pthread_mutex_unlock(&authlock);
+    return tmpl;
 }
 
 const uint8_t *Authenticator_logoutTmpl(const Authenticator *self, size_t *sz)
 {
+    const uint8_t *tmpl = tmpl_logout_html;
+    pthread_mutex_lock(&authlock);
     if (self->realm && self->realm->t_logout)
     {
 	*sz = self->realm->t_logout_sz;
-	return self->realm->t_logout;
+	tmpl = self->realm->t_logout;
     }
-    *sz = tmpl_logout_html_sz;
-    return tmpl_logout_html;
+    else *sz = tmpl_logout_html_sz;
+    pthread_mutex_unlock(&authlock);
+    return tmpl;
 }
 
 Session *Authenticator_session(const Authenticator *self)
@@ -213,7 +229,11 @@ AuthResult Authenticator_silentLogin(Authenticator *self)
 done:
     PSC_HashTableIterator_destroy(i);
     PSC_ListIterator_destroy(j);
-    if (authInfo && authInfo->user) result = AR_OK;
+    if (authInfo && authInfo->user)
+    {
+	authInfo->version = self->realm->version;
+	result = AR_OK;
+    }
     pthread_mutex_unlock(&authlock);
     return result;
 }
@@ -221,6 +241,11 @@ done:
 static RateLimit *getLimits(Authenticator *self)
 {
     AuthInfo *authInfo = getAuthInfo(self, 1);
+    if (authInfo->limitVersion != self->realm->limitVersion)
+    {
+	RateLimit_destroy(authInfo->failLimit);
+	authInfo->failLimit = 0;
+    }
     if (!authInfo->failLimit)
     {
 	RateLimitOpts *limitOpts = self->realm->limitOpts;
@@ -234,6 +259,7 @@ static RateLimit *getLimits(Authenticator *self)
 	    limitOpts = defaultLimitOpts;
 	}
 	authInfo->failLimit = RateLimit_create(limitOpts);
+	authInfo->limitVersion = self->realm->limitVersion;
     }
     return authInfo->failLimit;
 }
@@ -275,6 +301,7 @@ AuthResult Authenticator_login(Authenticator *self,
 		if (result == AR_OK)
 		{
 		    authInfo->user = createUser(user, realname, checkerName);
+		    authInfo->version = self->realm->version;
 		}
 		else
 		{
@@ -358,7 +385,7 @@ static void initTmpl(const char *tmplPath, const char *nm, const char *realm,
 {
     char buf[1024];
     snprintf(buf, sizeof buf, "%s/%s.%s.html", tmplPath, nm, realm);
-    int fd = open(buf, O_RDONLY);
+    int fd = open(buf, O_RDONLY|O_CLOEXEC);
     if (fd < 0 || !(*data = readTmpl(fd, datasz)))
     {
 	snprintf(buf, sizeof buf, "%s/%s.html", tmplPath, nm);
@@ -371,39 +398,28 @@ static void initTmpl(const char *tmplPath, const char *nm, const char *realm,
     }
 }
 
-Realm *Realm_create(const char *name, const char *tmplPath)
-{
-    Realm *self = PSC_malloc(sizeof *self);
-    self->name = name;
-    self->checkers = PSC_List_create();
-    self->limitOpts = 0;
-    initTmpl(tmplPath, "login", name, &self->t_login, &self->t_login_sz);
-    initTmpl(tmplPath, "logout", name, &self->t_logout, &self->t_logout_sz);
-    return self;
-}
-
-void Realm_addChecker(Realm *self, const char *checker)
-{
-    PSC_List_append(self->checkers, PSC_copystr(checker), free);
-}
-
-void Realm_addLimit(Realm *self, uint16_t seconds, uint16_t limit)
-{
-    if (!self->limitOpts) self->limitOpts = RateLimitOpts_create(0);
-    RateLimitOpts_addLimit(self->limitOpts, seconds, limit);
-}
-
 void Authenticator_init(void)
 {
     checkers = PSC_HashTable_create(4);
     realms = PSC_HashTable_create(4);
     pthread_mutex_init(&authlock, 0);
+    defLimitVersion = 0;
 }
 
-void Authenticator_addDefaultLimit(uint16_t seconds, uint16_t limit)
+void Authenticator_setDefaultLimit(RateLimitOpts *limitOpts)
 {
-    if (!defaultLimitOpts) defaultLimitOpts = RateLimitOpts_create(0);
-    RateLimitOpts_addLimit(defaultLimitOpts, seconds, limit);
+    if ((!defaultLimitOpts && !limitOpts) ||
+	    (defaultLimitOpts && limitOpts &&
+	     RateLimitOpts_equals(defaultLimitOpts, limitOpts)))
+    {
+	RateLimitOpts_destroy(limitOpts);
+    }
+    else
+    {
+	RateLimitOpts_destroy(defaultLimitOpts);
+	defaultLimitOpts = limitOpts;
+	defLimitVersion += 2U;
+    }
 }
 
 void Authenticator_registerChecker(
@@ -412,9 +428,64 @@ void Authenticator_registerChecker(
     PSC_HashTable_set(checkers, name, checker, checker->destroy);
 }
 
-void Authenticator_registerRealm(Realm *realm)
+void Authenticator_registerRealm(const char *name, const char *tmplPath,
+	PSC_List *checkerNames, RateLimitOpts *limitOpts)
 {
-    PSC_HashTable_set(realms, realm->name, realm, deleteRealm);
+    Realm *realm = PSC_HashTable_get(realms, name);
+    if (realm)
+    {
+	free(realm->t_login);
+	free(realm->t_logout);
+	PSC_ListIterator *oc = PSC_List_iterator(realm->checkers);
+	PSC_ListIterator *nc = PSC_List_iterator(checkerNames);
+	int ok = 1;
+	while (ok)
+	{
+	    int omn = PSC_ListIterator_moveNext(oc);
+	    int nmn = PSC_ListIterator_moveNext(nc);
+	    if (!omn && !nmn) break;
+	    if (!omn || !nmn) ok = 0;
+	    else if (strcmp(PSC_ListIterator_current(oc),
+			PSC_ListIterator_current(nc))) ok = 0;
+	}
+	PSC_ListIterator_destroy(nc);
+	PSC_ListIterator_destroy(oc);
+	if (ok) PSC_List_destroy(checkerNames);
+	else
+	{
+	    PSC_List_destroy(realm->checkers);
+	    realm->checkers = checkerNames;
+	    ++realm->version;
+	}
+	if ((!realm->limitOpts && !limitOpts) ||
+		(realm->limitOpts && limitOpts &&
+		 RateLimitOpts_equals(realm->limitOpts, limitOpts)))
+	{
+	    RateLimitOpts_destroy(limitOpts);
+	}
+	else
+	{
+	    RateLimitOpts_destroy(realm->limitOpts);
+	    realm->limitOpts = limitOpts;
+	    if (limitOpts)
+	    {
+		realm->limitVersion = (realm->limitVersion + 2U) | 1U;
+	    }
+	    else realm->limitVersion = defLimitVersion;
+	}
+    }
+    else
+    {
+	realm = PSC_malloc(sizeof *realm);
+	realm->name = name;
+	realm->checkers = checkerNames;
+	realm->limitOpts = limitOpts;
+	realm->version = 0;
+	realm->limitVersion = limitOpts ? defLimitVersion : 1;
+	PSC_HashTable_set(realms, realm->name, realm, deleteRealm);
+    }
+    initTmpl(tmplPath, "login", name, &realm->t_login, &realm->t_login_sz);
+    initTmpl(tmplPath, "logout", name, &realm->t_logout, &realm->t_logout_sz);
 }
 
 void Authenticator_lockAndClear(void)
@@ -422,6 +493,11 @@ void Authenticator_lockAndClear(void)
     pthread_mutex_lock(&authlock);
     PSC_HashTable_destroy(checkers);
     checkers = PSC_HashTable_create(4);
+}
+
+void Authenticator_removeRealm(const char *name)
+{
+    PSC_HashTable_delete(realms, name);
 }
 
 void Authenticator_unlock(void)
