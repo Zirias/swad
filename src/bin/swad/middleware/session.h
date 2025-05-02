@@ -4,6 +4,7 @@
 #include <poser/decl.h>
 #include <stdint.h>
 
+C_CLASS_DECL(RateLimitOpts);
 C_CLASS_DECL(Session);
 C_CLASS_DECL(HttpContext);
 
@@ -17,7 +18,7 @@ void *Session_getProp(Session *self, const char *name)
 void Session_setProp(Session *self, const char *name,
 	void *obj, ObjDeleter deleter) CMETHOD ATTR_NONNULL((2));
 
-void MW_SessionOpts_addLimit(uint16_t seconds, uint16_t limit);
+void MW_SessionOpts_setCreateLimit(RateLimitOpts *opts);
 void MW_Session_init(void);
 void MW_Session(HttpContext *context) ATTR_NONNULL((1));
 void MW_Session_done(void);

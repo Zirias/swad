@@ -924,6 +924,25 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers)
     fclose(f);
 
     self->resolveHosts = other->resolveHosts;
+    self->nsessionLimits = other->nsessionLimits;
+    self->nloginLimits = other->nloginLimits;
+    memcpy(self->sessionSeconds, other->sessionSeconds,
+	    sizeof self->sessionSeconds);
+    memcpy(self->sessionLimits, other->sessionLimits,
+	    sizeof self->sessionLimits);
+    memcpy(self->loginSeconds, other->loginSeconds,
+	    sizeof self->loginSeconds);
+    memcpy(self->loginLimits, other->loginLimits,
+	    sizeof self->loginLimits);
+    free(self->loginRoute);
+    self->loginRoute = other->loginRoute;
+    other->loginRoute = 0;
+    free(self->staticRoute);
+    self->staticRoute = other->staticRoute;
+    other->staticRoute = 0;
+    free(self->resourceDir);
+    self->resourceDir = other->resourceDir;
+    other->resourceDir = 0;
 
     for (size_t i = 0; i < self->servers_count; ++i)
     {

@@ -44,6 +44,9 @@ void HttpServer_addRoute(HttpServer *self, const char *prefix,
 	HttpHandler handler, HttpMethod methodMask,
 	HttpMethodCheck methodCheck)
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
+void HttpServer_updateRoute(HttpServer *self, const char *prefix,
+	HttpHandler handler, const char *newPrefix)
+    CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
 void HttpServer_addMiddleware(HttpServer *self, HttpHandler handler)
     CMETHOD ATTR_NONNULL((2));
 void HttpServer_setLogLevelCallback(HttpServer *self, LogLevelCallback cb)

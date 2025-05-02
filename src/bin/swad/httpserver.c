@@ -646,6 +646,20 @@ void HttpServer_addRoute(HttpServer *self, const char *prefix,
     ++self->routescount;
 }
 
+void HttpServer_updateRoute(HttpServer *self, const char *prefix,
+	HttpHandler handler, const char *newPrefix)
+{
+    for (size_t i = 0; i < self->routescount; ++i)
+    {
+	if (self->routes[i].prefix == prefix
+		&& self->routes[i].handler == handler)
+	{
+	    self->routes[i].prefix = newPrefix;
+	    return;
+	}
+    }
+}
+
 void HttpServer_addMiddleware(HttpServer *self, HttpHandler handler)
 {
     if (self->middlewarescount == self->middlewarescapa)

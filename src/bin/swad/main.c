@@ -165,6 +165,19 @@ static CredentialsChecker *createPowChecker(const CfgChecker *ccfg)
 }
 #endif
 
+static void configureSession(void)
+{
+    RateLimitOpts *limitOpts = 0;
+    uint16_t seconds;
+    uint16_t limit;
+    for (size_t i = 0; Config_sessionLimit(cfg, i, &seconds, &limit); ++i)
+    {
+	if (!limitOpts) limitOpts = RateLimitOpts_create(1);
+	RateLimitOpts_addLimit(limitOpts, seconds, limit);
+    }
+    MW_SessionOpts_setCreateLimit(limitOpts);
+}
+
 static void configureAuthenticator(void)
 {
     RateLimitOpts *limitOpts = 0;
@@ -327,10 +340,15 @@ static void reloadConfig(int signo)
 {
     (void)signo;
 
+    const char *oldLoginRoute = Config_loginRoute(cfg);
+    const char *oldStaticRoute = Config_staticRoute(cfg);
+
     Authenticator_lockAndClear();
     Config_reread(cfg, &cfgupdate);
     configureAuthenticator();
+    loginHandler_setRoute(Config_loginRoute(cfg));
     Authenticator_unlock();
+    configureSession();
 
     const CfgServer *s;
     for (size_t i = 0; (s = Config_server(cfg, i)); ++i)
@@ -356,6 +374,13 @@ static void reloadConfig(int signo)
 		PSC_HashTable_set(servers, nm, server, destroyServer);
 	    }
 	}
+	else
+	{
+	    HttpServer_updateRoute(server, oldLoginRoute, loginHandler,
+		    Config_loginRoute(cfg));
+	    HttpServer_updateRoute(server, oldStaticRoute, staticHandler,
+		    Config_staticRoute(cfg));
+	}
 	HttpServerOpts_destroy(opts);
     }
 }
@@ -371,12 +396,7 @@ static void prestartup(void *receiver, void *sender, void *args)
     loginHandler_setRoute(Config_loginRoute(cfg));
     staticHandler_init(Config_resourceDir(cfg));
 
-    uint16_t seconds;
-    uint16_t limit;
-    for (size_t i = 0; Config_sessionLimit(cfg, i, &seconds, &limit); ++i)
-    {
-	MW_SessionOpts_addLimit(seconds, limit);
-    }
+    configureSession();
     MW_Session_init();
 
     Authenticator_init();

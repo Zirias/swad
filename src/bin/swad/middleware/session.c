@@ -81,9 +81,7 @@ static Session *createSession(time_t now, char *id)
     pthread_mutex_init(&self->lock, 0);
     self->ctime = now;
     self->atime = now;
-    pthread_mutex_lock(&sessionlock);
     PSC_Dictionary_set(sessions, id, SID_LEN, self, 0);
-    pthread_mutex_unlock(&sessionlock);
     return self;
 }
 
@@ -138,10 +136,41 @@ void Session_setProp(Session *self, const char *name,
     pthread_mutex_unlock(&self->lock);
 }
 
-void MW_SessionOpts_addLimit(uint16_t seconds, uint16_t limit)
+static RateLimitOpts *createDefaultLimitOpts(void)
 {
-    if (!createLimitOpts) createLimitOpts = RateLimitOpts_create(1);
-    RateLimitOpts_addLimit(createLimitOpts, seconds, limit);
+    RateLimitOpts *opts = RateLimitOpts_create(1);
+    RateLimitOpts_addLimit(opts, 5, 3);
+    RateLimitOpts_addLimit(opts, 60, 5);
+    RateLimitOpts_addLimit(opts, 3600, 25);
+    return opts;
+}
+
+void MW_SessionOpts_setCreateLimit(RateLimitOpts *opts)
+{
+    if ((!opts && !createLimitOpts) ||
+	    (opts && createLimitOpts &&
+	     RateLimitOpts_equals(createLimitOpts, opts)))
+    {
+	RateLimitOpts_destroy(opts);
+	return;
+    }
+
+    int ischange = !!createLimit;
+    if (ischange) pthread_mutex_lock(&sessionlock);
+    RateLimit_destroy(createLimit);
+    createLimitOpts = opts;
+    if (ischange)
+    {
+	int mustfree = 0;
+	if (!opts)
+	{
+	    opts = createDefaultLimitOpts();
+	    mustfree = 1;
+	}
+	createLimit = RateLimit_create(opts);
+	pthread_mutex_unlock(&sessionlock);
+	if (mustfree) RateLimitOpts_destroy(opts);
+    }
 }
 
 void MW_Session_init(void)
@@ -149,14 +178,15 @@ void MW_Session_init(void)
     pthread_mutex_init(&sessionlock, 0);
     pthread_mutex_init(&cleanlock, 0);
     cleantime = time(0);
-    if (!createLimitOpts)
+    RateLimitOpts *opts = createLimitOpts;
+    int mustfree = 0;
+    if (!opts)
     {
-	createLimitOpts = RateLimitOpts_create(1);
-	RateLimitOpts_addLimit(createLimitOpts, 5, 3);
-	RateLimitOpts_addLimit(createLimitOpts, 60, 5);
-	RateLimitOpts_addLimit(createLimitOpts, 3600, 25);
+	opts = createDefaultLimitOpts();
+	mustfree = 1;
     }
-    createLimit = RateLimit_create(createLimitOpts);
+    createLimit = RateLimit_create(opts);
+    if (mustfree) RateLimitOpts_destroy(opts);
     sessions = PSC_Dictionary_create(deleteSession);
 }
 
@@ -183,14 +213,17 @@ void MW_Session(HttpContext *context)
 	const RemoteEntry *r = PSC_List_at(
 		ProxyList_get(context), ProxyList_firstTrusted(context));
 	const PSC_IpAddr *addr = RemoteEntry_addr(r);
+	pthread_mutex_lock(&sessionlock);
 	if (!RateLimit_check(createLimit, PSC_IpAddr_string(addr)))
 	{
+	    pthread_mutex_unlock(&sessionlock);
 	    HttpContext_setResponse(context,
 		    HttpResponse_createError(HTTP_TOOMANYREQUESTS, 0));
 	    return;
 	}
 	char newsid[SID_LEN+1];
 	self = createSession(now, newsid);
+	pthread_mutex_unlock(&sessionlock);
 	if (!self)
 	{
 	    PSC_Log_msg(PSC_L_ERROR,
