@@ -385,6 +385,8 @@ static void reloadConfig(int signo)
 
     free(data.oldLoginRoute);
     free(data.oldStaticRoute);
+
+    PSC_Log_setMaxLogLevel(Config_logLevel(cfg));
 }
 
 static void prestartup(void *receiver, void *sender, void *args)
@@ -428,7 +430,11 @@ static void prestartup(void *receiver, void *sender, void *args)
 	PSC_Log_msg(PSC_L_ERROR, "Could not create any servers");
 	PSC_EAStartup_return(ea, EXIT_FAILURE);
     }
-    else PSC_Service_registerSignal(SIGHUP, reloadConfig);
+    else
+    {
+	PSC_Log_setMaxLogLevel(Config_logLevel(cfg));
+	PSC_Service_registerSignal(SIGHUP, reloadConfig);
+    }
 }
 
 static void shutdown(void *receiver, void *sender, void *args)
@@ -449,7 +455,7 @@ static void shutdown(void *receiver, void *sender, void *args)
 int main(int argc, char **argv)
 {
     cfg = Config_create(argc, argv);
-    PSC_Log_setMaxLogLevel(Config_verbose(cfg) ? PSC_L_DEBUG : PSC_L_INFO);
+    PSC_Log_setMaxLogLevel(Config_logLevel(cfg));
     PSC_Log_setFileLogger(stderr);
     Config_readConfigFile(cfg);
 

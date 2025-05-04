@@ -33,6 +33,23 @@
 #
 ; pidfile = %%RUNSTATEDIR%%/swad.pid
 
+# Logging verbosity.
+#
+# Set the maximum log level to use for logging output. This is overridden by
+# the commandline flag `-v', which forces this setting to `debug'.
+#
+# Available levels:
+#
+# * fatal	Only log fatal errors leading to termination of the service
+# * error	Also log non-fatal error conditions (indicating something is
+# 		seriously wrong)
+# * warning	Also log warnings (where something is likely to go wrong)
+# * info	Also log relevant informational messages (like http request
+# 		logging)
+# * debug	Also log info probably only relevant for debugging swad
+#
+; log_level = info
+
 # Resolve remote hosts
 #
 # Determines whether an attempt is made to resolve the hostname of a remote

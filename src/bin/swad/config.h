@@ -3,6 +3,7 @@
 
 #include "proxyheader.h"
 
+#include <poser/core/log.h>
 #include <poser/core/proto.h>
 #include <poser/decl.h>
 #include <stddef.h>
@@ -70,7 +71,7 @@ long Config_gid(const Config *self) CMETHOD;
 const char *Config_pidfile(const Config *self) CMETHOD ATTR_RETNONNULL;
 int Config_resolveHosts(const Config *self) CMETHOD;
 int Config_foreground(const Config *self) CMETHOD;
-int Config_verbose(const Config *self) CMETHOD;
+PSC_LogLevel Config_logLevel(const Config *self) CMETHOD;
 int Config_sessionLimit(const Config *self,
 	size_t num, uint16_t *seconds, uint16_t *limit) CMETHOD;
 int Config_loginFailLimit(const Config *self,

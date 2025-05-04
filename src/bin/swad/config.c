@@ -102,6 +102,7 @@ struct Config
     int maxThreads;
     int jobQueuePerThread;
     int maxJobQueue;
+    PSC_LogLevel logLevel;
     uint16_t sessionSeconds[8];
     uint16_t sessionLimits[8];
     uint16_t loginSeconds[8];
@@ -558,6 +559,15 @@ static void readOption(Config *self, char *lp)
 	memcpy(self->staticRoute+routelen, "/static", sizeof "/static");
 	return;
     }
+    if (!strcmp(key, "log_level"))
+    {
+	if (!strcasecmp(value, "fatal")) self->logLevel = PSC_L_FATAL;
+	else if (!strcasecmp(value, "error")) self->logLevel = PSC_L_ERROR;
+	else if (!strcasecmp(value, "warning")) self->logLevel = PSC_L_WARNING;
+	else if (!strcasecmp(value, "info")) self->logLevel = PSC_L_INFO;
+	else if (!strcasecmp(value, "debug")) self->logLevel = PSC_L_DEBUG;
+	else goto inval;
+    }
     if (!strcmp(key, "resource_dir"))
     {
 	free(self->resourceDir);
@@ -861,6 +871,7 @@ Config *Config_create(int argc, char **argv)
     self->uid = -1;
     self->gid = -1;
     self->resolveHosts = -1;
+    self->logLevel = -1;
 
     server = getServer(self, 0);
     int rc = readArguments(self, argc, argv);
@@ -925,6 +936,8 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers,
     fclose(f);
 
     self->resolveHostsCfg = other->resolveHostsCfg;
+    self->verbose = other->verbose;
+    self->logLevel = other->logLevel;
     self->nsessionLimits = other->nsessionLimits;
     self->nloginLimits = other->nloginLimits;
     memcpy(self->sessionSeconds, other->sessionSeconds,
@@ -1149,9 +1162,11 @@ int Config_foreground(const Config *self)
     return self->foreground;
 }
 
-int Config_verbose(const Config *self)
+PSC_LogLevel Config_logLevel(const Config *self)
 {
-    return self->verbose;
+    if (self->verbose) return PSC_L_DEBUG;
+    else if (self->logLevel < 0) return PSC_L_INFO;
+    else return (self->logLevel);
 }
 
 int Config_sessionLimit(const Config *self,
