@@ -68,6 +68,18 @@ sub-requests for authentication, like nginx' `auth_request` module.
   browser is given a cryptographic puzzle to solve for granting access.
   For more details, see [README.pow.md](README.pow.md).
 
+## Reference documentation
+
+`swad` installs a sample configuration file that's fully documented in
+comments, you can also find it
+[in the source tree](src/bin/swad/swad.conf.sample.in).
+
+Also, the following manpages are built and installed:
+
+* [swad(8)](https://zirias.github.io/swad/man/swad.8.html)
+* [swadpw(1)](https://zirias.github.io/swad/man/swadpw.1.html)
+  (only for the `file` credentials checker)
+
 ## How it works
 
 `swad` offers cookie authentication using a randomly generated session cookie
