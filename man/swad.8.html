@@ -1,0 +1,336 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<style>
+/* <![CDATA[ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bgcol: #2e2b28;
+    --fgcol: #c8c6c5;
+    --strongcol: #4576e6;
+    --emcol: #41d9c2;
+  }
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bgcol: #c8c6c5;
+    --fgcol: black;
+    --strongcol: #193c83;
+    --emcol: #346a6f;
+  }
+}
+* {
+  font-family: monospace;
+  font-size: medium;
+  margin: 0;
+  padding: 0;
+  color: var(--fgcol);
+}
+body {
+  position: absolute;
+  padding-left: 3.5ch;
+  padding-right: .5ch;
+  padding-top: .5em;
+  padding-bottom: 2em;
+  background-color: var(--bgcol);
+}
+h1, h2 {
+  margin-left: -3ch;
+}
+h3 {
+  margin-left: -1ch;
+}
+h1 {
+  font-weight: normal;
+}
+h2, h3 {
+  clear: left;
+  padding-top: 1em;
+  font-weight: bold;
+  color: var(--strongcol);
+}
+h1:before {
+  position: absolute;
+  right: 1ch;
+  content: attr(data-man-sectionname);
+}
+p {
+  margin-top: 1em;
+}
+h2 + p, h3 + p {
+  margin-top: 0;
+  gap: 0;
+}
+table {
+  border-spacing: 0;
+}
+td {
+  vertical-align: top;
+  padding-right: 1ch;
+}
+td:last-child {
+  padding-right: 0;
+}
+p + table {
+  margin-top: 1em;
+}
+dl {
+  clear: left;
+  padding-top: 1em;
+}
+h2 + dl, h3 + dl {
+  padding-top: 0;
+}
+dd {
+  width: 100%;
+}
+dl.name, dl.synopsis, dl.meta, dl.environment {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0;
+}
+dl.name dt, dl.synopsis dt, dl.meta dt, dl.environment dt {
+  grid-column: 1;
+  margin-right: 1ch;
+}
+dl.environment dt {
+  margin-right: 2ch;
+}
+dl.synopsis dt {
+  font-weight: bold;
+  color: var(--strongcol);
+}
+dl.name dd, dl.synopsis dd, dl.meta dd, dl.environment dd {
+  grid-column: 2;
+}
+dl.description {
+  margin-left: 3ch;
+}
+dl.description > dt {
+  margin-top: 1em;
+  clear: left;
+  float: left;
+  margin-left: -3ch;
+  margin-bottom: -1em;
+}
+dl.description > dd {
+  margin-top: 1em;
+  float: left;
+}
+dl.environment > dt {
+  margin-top: 1em;
+}
+dl.environment > dd {
+  margin-top: 1em;
+}
+dl.description > dt:first-child, dl.description > dt:first-child + dd,
+dl.environment > dt:first-child, dl.environment > dt:first-child + dd,
+dl dl.description dt, dl dl.description dd {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+dl.description dd:has(> table) {
+  clear: left;
+}
+dl dd p:first-child {
+  margin-top: 0;
+}
+dl.footer {
+  margin-left: -3ch;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0;
+}
+dl.footer > dt, dl.footer > dd:last-child {
+  display: none;
+}
+span.link, span.name, span.flag, a {
+  font-weight: bold;
+  white-space: nowrap;
+  color: var(--strongcol);
+}
+a {
+  text-decoration: none;
+  font-weight: bold;
+  color: var(--strongcol);
+}
+a:hover {
+  text-decoration: underline;
+}
+span.arg, span.file {
+  text-decoration: underline;
+  color: var(--emcol);
+}
+@media only screen and (min-width: 80ch) {
+  body {
+    width: 73ch;
+    padding-left: 6.5ch;
+    padding-top: 1em;
+  }
+  h1, h2 { margin-left: -5ch; }
+  h3 { margin-left: -2ch; }
+  h1:before {
+    position: absolute;
+    right: initial;
+    left: 40ch;
+    transform: translateX(-50%);
+    content: attr(data-man-sectionname);
+  }
+  h1:after {
+    position: absolute;
+    left: 80ch;
+    margin-left: 0;
+    transform: translateX(-100%);
+    content: attr(data-man-title) "(" attr(data-man-section) ")";
+  }
+  td { padding-right: 2ch; }
+  dl.description { margin-left: 8ch; }
+  dl.description > dt {
+    margin-left: -8ch;
+    padding-right: 1ch;
+  }
+  dl.meta dt {
+    margin-right: 2ch;
+  }
+  dl.footer {
+    margin-left: -5ch;
+    grid-template-columns: auto 1fr auto;
+  }
+  dl.footer > dd:last-child {
+    display: block;
+  }
+  dl.footer > dd {
+    text-align: center;
+  }
+}
+/* ]]> */
+</style>
+<title>SWAD(8)</title>
+<meta name="viewport" content="width=device-width">
+</head>
+<body>
+<h1 data-man-title="SWAD" data-man-section="8" data-man-sectionname="General Commands Manual">SWAD(8)</h1>
+<h2>NAME</h2>
+<dl class="name">
+<dt><span class="name">swad</span> &ndash;</dt>
+<dd>Simple Web Authentication Daemon</dd>
+</dl>
+<h2>SYNOPSIS</h2>
+<dl class="synopsis">
+<dt>swad</dt>
+<dd>
+<span class="flag">-V</span>
+</dd>
+<dt>swad</dt>
+<dd>
+<span class="flag">-h</span>
+</dd>
+<dt>swad</dt>
+<dd>
+[<span class="flag">-frvR</span>]
+[<span class="flag">-c</span>&nbsp;<span class="arg">file</span>]
+[<span class="flag">-g</span>&nbsp;<span class="arg">group</span>]
+[<span class="flag">-u</span>&nbsp;<span class="arg">user</span>]
+</dd>
+</dl>
+<h2>DESCRIPTION</h2>
+<p><span class="name">swad</span> provides a http service for cookie authentication with a HTML login form. The intended usage is to put it behind a reverse proxy that can do sub-requests for authentication, like nginx' <span class="name">auth_request</span> module.</p>
+<p>It supports authentication methods using a username and a password as credentials. For these, different credential checkers can be configured.</p>
+<p>Login is offered for configurable realms, which have a name and a stack of credential checkers. These checkers are tried in the order they are configured for the realm.</p>
+<p>The options are as follows:</p>
+<dl class="description">
+<dt><span class="flag">-c</span>&nbsp;<span class="arg">file</span></dt>
+<dd>
+<p>Path to the configuration file.</p>
+<dl class="meta">
+<dt>default:</dt><dd><p><span class="file">/usr/local/etc/swad.conf</span></p>
+</dd>
+</dl>
+</dd>
+<dt><span class="flag">-f</span></dt>
+<dd>
+<p>Don't detach from the controlling terminal, instead run in foreground. In this mode, log output goes directly to the terminal.</p>
+</dd>
+<dt><span class="flag">-g</span>&nbsp;<span class="arg">group</span></dt>
+<dd>
+<p>Run as the given group name or gid. Only works when <span class="name">swad</span> is started as root.</p>
+<dl class="meta">
+<dt>default:</dt><dd><p>Use the primary group of the configured user, or no change</p>
+</dd>
+</dl>
+</dd>
+<dt><span class="flag">-h</span></dt>
+<dd>
+<p>Print a help text and exit.</p>
+</dd>
+<dt><span class="flag">-r</span></dt>
+<dd>
+<p>Attempt to resolve remote hostnames.</p>
+</dd>
+<dt><span class="flag">-u</span>&nbsp;<span class="arg">user</span></dt>
+<dd>
+<p>Run as the given user name or uid. Only works when <span class="name">swad</span> is started as root.</p>
+<dl class="meta">
+<dt>default:</dt><dd><p>Don't attempt to change the user</p>
+</dd>
+</dl>
+</dd>
+<dt><span class="flag">-v</span></dt>
+<dd>
+<p>Set the log level to debug to enable verbose output.</p>
+</dd>
+<dt><span class="flag">-R</span></dt>
+<dd>
+<p>Don't attempt to resolve remote hostnames. This is the default unless the configuration file enables resolving.</p>
+</dd>
+<dt><span class="flag">-V</span></dt>
+<dd>
+<p>Print version information and exit.</p>
+</dd>
+</dl>
+<h3>Additional information</h3>
+<dl class="meta">
+<dt>Version:</dt>
+<dd><span class="name">swad</span> v0.5</dd>
+<dt>License:</dt><dd>BSD 2-clause (all rights reserved)</dd>
+<dt>WWW:</dt><dd><a href="https://github.com/Zirias/swad">https://github.com/Zirias/swad</a></dd>
+</dl>
+<h2>SIGNALS</h2>
+<dl class="environment">
+<dt><span class="name">SIGHUP</span></dt>
+<dd>
+<p>Reload configuration, which includes the configuration file, TLS certificate and key files, and files read from the resource directory (custom templates and custom <span class="name">style.css</span>).</p>
+<p>Changes to the user/group to run as, the pidfile location and all thread-pool configurations are ignored because they cannot be applied while running.</p>
+<p>For configured servers, the listening sockets are left untouched as long as neither <span class="name">port</span>, <span class="name">listen</span> nor <span class="name">proto</span> are changed. Otherwise, the old server will stop listening, but wait for all active connections to end, and a new server will replace it immediately.</p>
+<p>Credential checkers are simply re-created without any further action, so if you change settings for one without changing its name, a login that used it will still be considered valid after configuration reload.</p>
+<p>For realms, changes are detected and any login for a realm is considered invalid after the realm's configuration changed, so users are forced to login again.</p>
+<p>WARNING: When you launch <span class="name">swad</span> as root, but configure it to drop privileges, some actions might fail on configuration reload. Be careful when modifying server configurations that use a privileged port number (below 1024), they can't be used any more once privileges are dropped, so don't touch <span class="name">port</span>, <span class="name">listen</span> and <span class="name">proto</span> for such servers. Also for the PAM credentials checker, the little helper process must run as root for some PAM modules (notably <span class="name">pam_unix</span>(8)), but launching it as root is no longer possible after dropping privileges, so if you need PAM, make sure your configuration already includes it when first starting <span class="name">swad</span>. In general, pay attention to the permissions of required files (like TLS certificates), so the unprivileged user <span class="name">swad</span> is running as is allowed to read them.</p>
+</dd>
+<dt><span class="name">SIGINT</span></dt>
+<dd>
+<p>Same as <span class="name">SIGTERM</span>.</p>
+</dd>
+<dt><span class="name">SIGTERM</span></dt>
+<dd>
+<p>Shut down <span class="name">swad</span>. Cleanup is performed, but all currently active connections will be closed.</p>
+</dd>
+</dl>
+<h2>FILES</h2>
+<dl class="description">
+<dt><span class="file">/usr/local/etc/swad.conf</span></dt>
+<dd>
+<p>The configuration file. An example is installed with a <span class="name">.sample</span> suffix, all the settings are documented in there. For settings that also have a commandline flag, the commandline overrides the configuration file.</p>
+</dd>
+</dl>
+<h2>AUTHORS</h2>
+Felix Palmen  &lt;<a href="mailto:felix@palmen-it.de">felix@palmen-it.de</a>&gt;
+<dl class="footer">
+<dt>Origin:</dt>
+<dd>swad v0.5</dd>
+<dt>Date:</dt>
+<dd>April 4, 2025</dd>
+<dt>Title:</dt>
+<dd>SWAD(1)</dd>
+</dl>
+</body>
+</html>
