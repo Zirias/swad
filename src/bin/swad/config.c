@@ -94,6 +94,7 @@ struct Config
     long uid;
     long gid;
     int resolveHosts;
+    int resolveHostsCfg;
     int foreground;
     int verbose;
     int defaultThreads;
@@ -514,8 +515,7 @@ static void readOption(Config *self, char *lp)
     }
     if (!strcmp(key, "resolve_hosts"))
     {
-	if (self->resolveHosts < 0 &&
-		boolArg(&self->resolveHosts, value) < 0) goto inval;
+	if (boolArg(&self->resolveHostsCfg, value) < 0) goto inval;
 	return;
     }
     if (!strcmp(key, "session_limit"))
@@ -908,7 +908,7 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers,
 {
     Config *other = PSC_malloc(sizeof *other);
     memset(other, 0, sizeof *other);
-    other->resolveHosts = -1;
+    other->resolveHosts = self->resolveHosts;
     other->cfgfile = self->cfgfile;
     int fd = open(other->cfgfile, O_RDONLY|O_CLOEXEC);
     FILE *f = 0;
@@ -924,7 +924,7 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers,
     readConfigFile(other, f);
     fclose(f);
 
-    self->resolveHosts = other->resolveHosts;
+    self->resolveHostsCfg = other->resolveHostsCfg;
     self->nsessionLimits = other->nsessionLimits;
     self->nloginLimits = other->nloginLimits;
     memcpy(self->sessionSeconds, other->sessionSeconds,
@@ -1141,7 +1141,7 @@ const char *Config_pidfile(const Config *self)
 
 int Config_resolveHosts(const Config *self)
 {
-    return self->resolveHosts < 0 ? 0 : self->resolveHosts;
+    return self->resolveHosts < 0 ? self->resolveHostsCfg : self->resolveHosts;
 }
 
 int Config_foreground(const Config *self)
