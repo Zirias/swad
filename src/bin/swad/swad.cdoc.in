@@ -66,6 +66,50 @@ group: 0
 optional: 0
 description: Print version information and exit.
 
+[sig HUP]
+description:
+Reload configuration, which includes the configuration file, TLS certificate
+and key files, and files read from the resource directory (custom templates
+and custom `style.css`).
+
+Changes to the user/group to run as, the pidfile location and all thread-pool
+configurations are ignored because they cannot be applied while running.
+
+For configured servers, the listening sockets are left untouched as long as
+neither `port`, `listen` nor `proto` are changed. Otherwise, the old server
+will stop listening, but wait for all active connections to end, and a new
+server will replace it immediately.
+
+Credential checkers are simply re-created without any further action, so if
+you change settings for one without changing its name, a login that used it
+will still be considered valid after configuration reload.
+
+For realms, changes are detected and any login for a realm is considered
+invalid after the realm's configuration changed, so users are forced to login
+again.
+
+WARNING: When you launch %%name%% as root, but configure it to drop
+privileges, some actions might fail on configuration reload. Be careful when
+modifying server configurations that use a privileged port number (below
+1024), they can't be used any more once privileges are dropped, so don't touch
+`port`, `listen` and `proto` for such servers. Also for the PAM credentials
+checker, the little helper process must run as root for some PAM modules
+(notably `pam_unix.so`), but launching it as root is no longer possible after
+dropping privileges, so if you need PAM, make sure your configuration already
+includes it when first starting %%name%%. In general, pay attention to the
+permissions of required files (like TLS certificates), so the unprivileged
+user %%name%% is running as is allowed to read them.
+.
+
+[sig INT]
+description: Same as `SIGTERM`.
+
+[sig TERM]
+description:
+Shut down %%name%%. Cleanup is performed, but all currently active connections
+will be closed.
+.
+
 [file %%SYSCONFDIR%%/swad.conf]
 description:
 The configuration file. An example is installed with a `.sample` suffix, all
