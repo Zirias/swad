@@ -17,6 +17,7 @@ Login is offered for configurable realms, which have a name and a stack of
 credential checkers. These checkers are tried in the order they are
 configured for the realm.
 .
+manrefs: &pam_unix.8
 
 defgroup: 2
 
@@ -94,7 +95,7 @@ modifying server configurations that use a privileged port number (below
 1024), they can't be used any more once privileges are dropped, so don't touch
 `port`, `listen` and `proto` for such servers. Also for the PAM credentials
 checker, the little helper process must run as root for some PAM modules
-(notably `pam_unix.so`), but launching it as root is no longer possible after
+(notably `pam_unix`), but launching it as root is no longer possible after
 dropping privileges, so if you need PAM, make sure your configuration already
 includes it when first starting %%name%%. In general, pay attention to the
 permissions of required files (like TLS certificates), so the unprivileged
