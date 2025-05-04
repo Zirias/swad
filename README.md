@@ -6,15 +6,47 @@ sub-requests for authentication, like nginx' `auth_request` module.
 
 ## Features
 
-* Configurable credential checker modules (for username + password)
+* Configurable credential checker modules, typically checking a supplied
+  username and password, see below for details
 * Configurable authentication realms, with a stack of credential checkers
   to try for that realm
+* Silent login: When already authenticated for a different realm, no login
+  form is shown if the other login was done using a credential checker that's
+  also allowed for the requested realm
+* Automatic tracking of the page that triggered the authentication request
+  (with help from the reverse proxy, see configuration example below),
+  automatic redirect back there after successful login
+* User-supplied templates (e.g. for the login form) and `style.css`
+* Runtime configuration changes by handling `SIGHUP`
+
+### Reliability and scalability
+
+* Small and efficient C code base with almost no external dependencies
+* Reactor pattern with an attached thread pool to run the request pipelines
+* Support for `kqueue` (on BSD systems) and `epoll` (on Linux) for obtaining
+  events from the system, with fallback to `select` or, as a build option,
+  `poll`, for POSIX portability
+* Support for POSIX user context switching, allowing to release a worker
+  thread while waiting for some async I/O
+* Reliable pidfile handling with locks to automatically detect stale pidfiles
+  and recover without intervention
+
+### Security
+
 * Optional HTTPS support
+* Privilege dropping and separation
 * Protection against CSRF (Cross-site request forgery)
 * Configurable rate-limit for creating new sessions (protect against DoS)
 * Configurable rate-limit for failed logins per session, realm and user name
   (protect against brute-force)
-* Redirects back to the page that triggered the login
+* Multiple methods to obtain random data, prefering "better" ones like
+  arc4random or getrandom
+* Zero-out memory holding sensitive data (passwords, hashes) as soon as it
+  isn't needed any more
+* Support for `MAP_STACK` to profit e.g from systems using extra guard pages
+  for stacks
+* Protection against leaking file descriptors by using close-on-exec for all
+  of them, prefering atomic APIs if available
 
 ### Available credential checker modules
 
