@@ -4,6 +4,11 @@
 form. The intended usage is to put it behind a reverse proxy that can do
 sub-requests for authentication, like nginx' `auth_request` module.
 
+It can also be used to require clients to do a cryptographic
+**proof of work**, using the optional `pow` credentials checker, which does
+basically the same thing also known from `Anubis`, see
+[README.pow.md](README.pow.md).
+
 ## Features
 
 * Configurable credential checker modules, typically checking a supplied
