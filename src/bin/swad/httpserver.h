@@ -34,6 +34,8 @@ void HttpServerOpts_trustedHeader(HttpServerOpts *self, ProxyHeader trusted)
     CMETHOD;
 void HttpServerOpts_nat64Prefix(HttpServerOpts *self, const PSC_IpAddr *prefix)
     CMETHOD ATTR_NONNULL((2));
+void HttpServerOpts_connTimeout(HttpServerOpts *self, int timeout) CMETHOD;
+void HttpServerOpts_reqTimeout(HttpServerOpts *self, int timeout) CMETHOD;
 void HttpServerOpts_destroy(HttpServerOpts *self);
 
 HttpServer *HttpServer_create(const HttpServerOpts *opts)

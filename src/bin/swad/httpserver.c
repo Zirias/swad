@@ -19,14 +19,6 @@
 #define ROUTESCHUNK 32
 #define MIDDLEWARESCHUNK 8
 
-/* close connection after 10s of inactivity, unless a request is currently
- * handled */
-#define CONNTIMEOUT 10
-
-/* timeout requests after 15 seconds, not counting time waiting for async
- * tasks */
-#define REQUESTTIMEOUT 30
-
 #define CTXLOGKEY "_LOGRECORD"
 
 typedef struct HttpRoute
@@ -52,6 +44,8 @@ struct HttpServer
     ProxyHeader trustedHeader;
     int trustedProxies;
     int resolveHosts;
+    unsigned connTimeout;
+    unsigned reqTimeout;
 };
 
 struct HttpServerOpts
@@ -61,6 +55,8 @@ struct HttpServerOpts
     ProxyHeader trustedHeader;
     int trustedProxies;
     int resolveHosts;
+    unsigned connTimeout;
+    unsigned reqTimeout;
 };
 
 typedef struct ConnectionContext
@@ -252,7 +248,7 @@ static ConnectionContext *createContext(HttpServer *self, PSC_Connection *conn)
     ctx->server = self;
     ctx->timer = PSC_Timer_create();
     ctx->job = 0;
-    PSC_Timer_setMs(ctx->timer, CONNTIMEOUT * 1000U);
+    PSC_Timer_setMs(ctx->timer, self->connTimeout * 1000U);
     PSC_Timer_start(ctx->timer, 0);
     PSC_Event_register(PSC_Timer_expired(ctx->timer), conn, connTimeout, 0);
     ++ctx->server->nconn;
@@ -278,7 +274,7 @@ static void connActive(void *receiver, void *sender, void *args)
 
     PSC_Connection *conn = sender;
     ConnectionContext *ctx = PSC_Connection_data(conn);
-    PSC_Timer_setMs(ctx->timer, CONNTIMEOUT * 1000U);
+    PSC_Timer_setMs(ctx->timer, ctx->server->connTimeout * 1000U);
 }
 
 static void connTimeout(void *receiver, void *sender, void *args)
@@ -396,9 +392,11 @@ static void pipelineJobDone(void *receiver, void *sender, void *args)
 	    && status != HTTP_BADREQUEST && status != HTTP_TOOMANYREQUESTS
 	    && status < HTTP_INTERNALSERVERERROR)
     {
+	char keepalive[128];
+	snprintf(keepalive, sizeof keepalive,
+		"timeout=%u, max=1000", self->connTimeout);
         HeaderSet_set(headers, Header_create("Connection", "keep-alive"));
-        HeaderSet_set(headers, Header_create("Keep-Alive",
-                    "timeout=" STR(CONNTIMEOUT) ", max=1000"));
+        HeaderSet_set(headers, Header_create("Keep-Alive", keepalive));
 	PSC_Event_register(HttpResponse_sent(response), context,
 		httpResponseSentReuse, 0);
     }
@@ -494,7 +492,7 @@ done:
     {
 	ConnectionContext *ctx = PSC_Connection_data(conn);
 	ctx->job = PSC_ThreadJob_create(
-		pipelineJob, context, REQUESTTIMEOUT);
+		pipelineJob, context, self->reqTimeout * 2U);
 	PSC_Event_register(PSC_ThreadJob_finished(ctx->job), self,
 		pipelineJobDone, 0);
 	PSC_Event_register(PSC_Connection_closed(conn), self,
@@ -546,6 +544,8 @@ HttpServerOpts *HttpServerOpts_create(int port)
     self->trustedHeader = PH_XFWD | PH_RFC;
     self->trustedProxies = 0;
     self->resolveHosts = 0;
+    self->connTimeout = 10;
+    self->reqTimeout = 15;
     return self;
 }
 
@@ -586,6 +586,18 @@ void HttpServerOpts_nat64Prefix(HttpServerOpts *self, const PSC_IpAddr *prefix)
     self->nat64Prefix = prefix;
 }
 
+void HttpServerOpts_connTimeout(HttpServerOpts *self, int timeout)
+{
+    if (timeout < 1 || timeout > 3600) return;
+    self->connTimeout = timeout;
+}
+
+void HttpServerOpts_reqTimeout(HttpServerOpts *self, int timeout)
+{
+    if (timeout < 1 || timeout > 3600) return;
+    self->reqTimeout = timeout;
+}
+
 void HttpServerOpts_destroy(HttpServerOpts *self)
 {
     if (!self) return;
@@ -612,6 +624,8 @@ HttpServer *HttpServer_create(const HttpServerOpts *opts)
     self->trustedHeader = opts->trustedHeader;
     self->trustedProxies = opts->trustedProxies;
     self->resolveHosts = opts->resolveHosts;
+    self->connTimeout = opts->connTimeout;
+    self->reqTimeout = opts->reqTimeout;
 
     PSC_Event_register(PSC_Server_clientConnected(server), self,
 	    tcpClientConnected, 0);
@@ -626,6 +640,8 @@ int HttpServer_configure(HttpServer *self, const HttpServerOpts *opts)
     self->trustedHeader = opts->trustedHeader;
     self->trustedProxies = opts->trustedProxies;
     self->resolveHosts = opts->resolveHosts;
+    self->connTimeout = opts->connTimeout;
+    self->reqTimeout = opts->reqTimeout;
     return 0;
 }
 
