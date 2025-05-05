@@ -65,6 +65,8 @@ int CfgServer_trustedProxies(const CfgServer *self) CMETHOD;
 ProxyHeader CfgServer_trustedHeader(const CfgServer *self) CMETHOD;
 const PSC_IpAddr *CfgServer_nat64Prefix(const CfgServer *self)
     CMETHOD ATTR_RETNONNULL;
+int CfgServer_connectionTimeout(const CfgServer *self) CMETHOD;
+int CfgServer_requestTimeout(const CfgServer *self) CMETHOD;
 
 long Config_uid(const Config *self) CMETHOD;
 long Config_gid(const Config *self) CMETHOD;

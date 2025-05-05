@@ -269,6 +269,27 @@
 #
 ; nat64_prefix = 64:ff9b::/96
 
+# Connection timeout.
+#
+# Configures how long to wait for a request before closing the TCP connection
+# to the client, in seconds. This also applies to "keep-alive" connections.
+#
+# min: 1, max: 3600
+#
+; connection_timeout = 10
+
+# Request timeout.
+#
+# If a request pipeline on a thread job is running longer than this
+# (in seconds), attempt to cancel the job and return an internal server
+# error. Note times waiting for some async I/O task (which is used by the
+# `exec` and `pam` credential checkers to talk to the respective child
+# processes)  don't account for the request timeout.
+#
+# min: 1, max: 3600
+#
+; request_timeout = 15
+
 # ============================================================================
 
 # Credential checkers.

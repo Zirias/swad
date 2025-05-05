@@ -309,6 +309,8 @@ static HttpServerOpts *createServerOpts(const CfgServer *s)
     HttpServerOpts_trustedProxies(opts, CfgServer_trustedProxies(s));
     HttpServerOpts_trustedHeader(opts, CfgServer_trustedHeader(s));
     HttpServerOpts_nat64Prefix(opts, CfgServer_nat64Prefix(s));
+    HttpServerOpts_connTimeout(opts, CfgServer_connectionTimeout(s));
+    HttpServerOpts_reqTimeout(opts, CfgServer_requestTimeout(s));
     return opts;
 }
 

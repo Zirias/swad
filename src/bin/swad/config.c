@@ -62,6 +62,8 @@ struct CfgServer
     int port;
     int tls;
     int trustedProxies;
+    int connTimeout;
+    int reqTimeout;
 };
 
 typedef enum CfgSection
@@ -442,6 +444,16 @@ static void readServer(Config *self, char *lp)
 	    server->nat64Prefix = 0;
 	}
 	if (!server->nat64Prefix) goto inval;
+	return;
+    }
+    if (!strcmp(key, "connection_timeout"))
+    {
+	if (intArg(&server->connTimeout, value, 1, 3600, 10) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "request_timeout"))
+    {
+	if (intArg(&server->reqTimeout, value, 1, 3600, 10) < 0) goto inval;
 	return;
     }
 
@@ -1159,6 +1171,16 @@ const PSC_IpAddr *CfgServer_nat64Prefix(const CfgServer *self)
     if (self->nat64Prefix) return self->nat64Prefix;
     if (!nat64Prefix) nat64Prefix = PSC_IpAddr_create("64:ff9b::/96");
     return nat64Prefix;
+}
+
+int CfgServer_connectionTimeout(const CfgServer *self)
+{
+    return self->connTimeout ? self->connTimeout : 10;
+}
+
+int CfgServer_requestTimeout(const CfgServer *self)
+{
+    return self->reqTimeout ? self->reqTimeout : 15;
 }
 
 long Config_uid(const Config *self)
