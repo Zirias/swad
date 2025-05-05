@@ -105,7 +105,7 @@ struct Config
     int maxThreads;
     int jobQueuePerThread;
     int maxJobQueue;
-    PSC_LogLevel logLevel;
+    int logLevel;
     unsigned sessionMax;
     unsigned sessionIdle;
     uint16_t sessionSeconds[8];
@@ -602,6 +602,7 @@ static void readOption(Config *self, char *lp)
 	else if (!strcasecmp(value, "info")) self->logLevel = PSC_L_INFO;
 	else if (!strcasecmp(value, "debug")) self->logLevel = PSC_L_DEBUG;
 	else goto inval;
+	return;
     }
     if (!strcmp(key, "resource_dir"))
     {
