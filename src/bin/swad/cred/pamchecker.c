@@ -75,7 +75,6 @@ static void pamHelperDone(void *receiver, void *sender, void *args)
     pamStdin = 0;
     pamStdout = 0;
     pamProcess = 0;
-    pthread_mutex_unlock(&pamLock);
 
     PSC_EAProcessDone *ea = args;
     int signo = PSC_EAProcessDone_signal(ea);
@@ -93,9 +92,9 @@ static void pamHelperDone(void *receiver, void *sender, void *args)
     if (shutdown)
     {
 	shutdown = 0;
-	pthread_mutex_unlock(&pamLock);
 	PSC_Service_shutdownUnlock();
     }
+    pthread_mutex_unlock(&pamLock);
 }
 
 static void pipeClosed(void *receiver, void *sender, void *args)
@@ -123,6 +122,7 @@ static void shutdownPamProcess(void *receiver, void *sender, void *args)
     shutdown = 1;
     PSC_Service_shutdownLock();
     PSC_Connection_close(pamStdin, 0);
+    pthread_mutex_unlock(&pamLock);
 }
 
 static void setPamStream(void *obj,
