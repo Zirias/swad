@@ -168,6 +168,7 @@ static void createProcess(void)
     PSC_ProcessOpts_streamAction(opts, PSC_ST_STDOUT, PSC_SA_PIPE);
     PSC_ProcessOpts_streamAction(opts, PSC_ST_STDERR, PSC_SA_CLOSE);
     pamProcess = PSC_Process_create(opts);
+    PSC_ProcessOpts_destroy(opts);
     PSC_Event_register(PSC_Process_done(pamProcess), 0, pamHelperDone, 0);
     PSC_Process_exec(pamProcess, 0, setPamStream, LIBEXECDIR "/swad_pam");
 }
