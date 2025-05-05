@@ -88,6 +88,23 @@
 #
 ; login_fail_limit = 900:5
 
+# Lifetime of a client session
+#
+# This configures when sessions expire. The value must have the format
+# `<maxAge>[:<maxIdle>]` where <maxAge> is the maximum lifetime of a session
+# in seconds, and <maxIdle> is the time in seconds after which an idle session
+# (no client requests refering to it) expires.
+#
+# Authentication info is stored in the session, so an expired session will
+# force a user to login again. Be aware a session is created for *every*
+# unique client independent of authentication, so don't bump up the <maxIdle>
+# value too high to avoid consuming lots of RAM for stale sessions.
+#
+# The default <maxAge> is 12 hours, the default <maxIdle> one hour. The
+# minimum valid value for both is 60 (one minute).
+#
+; session_max_age = 43200:3600
+
 # Where to expose the login endpoint
 #
 # This configures the base route for the login endpoint, including its

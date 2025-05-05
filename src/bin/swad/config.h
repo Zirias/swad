@@ -76,6 +76,8 @@ int Config_sessionLimit(const Config *self,
 	size_t num, uint16_t *seconds, uint16_t *limit) CMETHOD;
 int Config_loginFailLimit(const Config *self,
 	size_t num, uint16_t *seconds, uint16_t *limit) CMETHOD;
+unsigned Config_sessionMaxAge(const Config *self) CMETHOD;
+unsigned Config_sessionMaxIdle(const Config *self) CMETHOD;
 int Config_defaultThreads(const Config *self) CMETHOD;
 int Config_threadsPerCpu(const Config *self) CMETHOD;
 int Config_maxThreads(const Config *self) CMETHOD;

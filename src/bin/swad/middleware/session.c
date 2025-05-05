@@ -34,8 +34,11 @@ struct Session
     time_t atime;
 };
 
-#define sessionExpired(s, n) ((n) - (s).atime > MAXIDLE \
-	|| (n) - (s).ctime > MAXAGE)
+static unsigned maxage = MAXAGE;
+static unsigned maxidle = MAXIDLE;
+
+#define sessionExpired(s, n) ((n) - (s).atime > maxidle \
+	|| (n) - (s).ctime > maxage)
 
 static PSC_Dictionary *sessions;
 static RateLimitOpts *createLimitOpts;
@@ -171,6 +174,12 @@ void MW_SessionOpts_setCreateLimit(RateLimitOpts *opts)
 	pthread_mutex_unlock(&sessionlock);
 	if (mustfree) RateLimitOpts_destroy(opts);
     }
+}
+
+void MW_SessionOpts_setMaxAge(unsigned maxAge, unsigned maxIdle)
+{
+    if (maxAge >= 60) maxage = maxAge;
+    if (maxIdle >= 60) maxidle = maxIdle;
 }
 
 void MW_Session_init(void)

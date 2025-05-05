@@ -19,6 +19,7 @@ void Session_setProp(Session *self, const char *name,
 	void *obj, ObjDeleter deleter) CMETHOD ATTR_NONNULL((2));
 
 void MW_SessionOpts_setCreateLimit(RateLimitOpts *opts);
+void MW_SessionOpts_setMaxAge(unsigned maxAge, unsigned maxIdle);
 void MW_Session_init(void);
 void MW_Session(HttpContext *context) ATTR_NONNULL((1));
 void MW_Session_done(void);

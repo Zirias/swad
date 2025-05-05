@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <limits.h>
 #include <poser/core/ipaddr.h>
 #include <poser/core/log.h>
 #include <poser/core/threadpool.h>
@@ -103,6 +104,8 @@ struct Config
     int jobQueuePerThread;
     int maxJobQueue;
     PSC_LogLevel logLevel;
+    unsigned sessionMax;
+    unsigned sessionIdle;
     uint16_t sessionSeconds[8];
     uint16_t sessionLimits[8];
     uint16_t loginSeconds[8];
@@ -547,6 +550,26 @@ static void readOption(Config *self, char *lp)
 	++self->nloginLimits;
 	return;
     }
+    if (!strcmp(key, "session_max_age"))
+    {
+	char *endp;
+	errno = 0;
+	long maxidle = 0;
+	long maxage = strtol(value, &endp, 10);
+	if (errno == ERANGE || endp == value || (*endp && *endp != ':')
+		|| maxage < 60 || maxage > UINT_MAX) goto inval;
+	if (*endp)
+	{
+	    char *maxidleval = endp + 1;
+	    errno = 0;
+	    maxidle = strtol(maxidleval, &endp, 10);
+	    if (errno == ERANGE || endp == maxidleval || *endp
+		    || maxidle < 60 || maxidle > UINT_MAX) goto inval;
+	}
+	self->sessionMax = maxage;
+	self->sessionIdle = maxidle;
+	return;
+    }
     if (!strcmp(key, "login_route"))
     {
 	free(self->loginRoute);
@@ -938,6 +961,8 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers,
     self->resolveHostsCfg = other->resolveHostsCfg;
     self->verbose = other->verbose;
     self->logLevel = other->logLevel;
+    self->sessionMax = other->sessionMax;
+    self->sessionIdle = other->sessionIdle;
     self->nsessionLimits = other->nsessionLimits;
     self->nloginLimits = other->nloginLimits;
     memcpy(self->sessionSeconds, other->sessionSeconds,
@@ -1185,6 +1210,16 @@ int Config_loginFailLimit(const Config *self,
     *seconds = self->loginSeconds[num];
     *limit = self->loginLimits[num];
     return 1;
+}
+
+unsigned Config_sessionMaxAge(const Config *self)
+{
+    return self->sessionMax;
+}
+
+unsigned Config_sessionMaxIdle(const Config *self)
+{
+    return self->sessionIdle;
 }
 
 int Config_defaultThreads(const Config *self)

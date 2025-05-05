@@ -176,6 +176,8 @@ static void configureSession(void)
 	RateLimitOpts_addLimit(limitOpts, seconds, limit);
     }
     MW_SessionOpts_setCreateLimit(limitOpts);
+    MW_SessionOpts_setMaxAge(
+	    Config_sessionMaxAge(cfg), Config_sessionMaxIdle(cfg));
 }
 
 static void configureAuthenticator(void)
