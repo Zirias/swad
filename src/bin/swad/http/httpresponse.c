@@ -34,6 +34,7 @@ struct HttpResponse
 {
     size_t bodySize;
     size_t sendPos;
+    size_t remaining;
     HeaderSet *headers;
     uint8_t *body;
     uint8_t *headerBuf;
@@ -136,6 +137,7 @@ HttpResponse *HttpResponse_create(HttpStatus status, MediaType bodyType)
     HttpResponse *self = PSC_malloc(sizeof *self);
     self->bodySize = 0;
     self->sendPos = 0;
+    self->remaining = 0;
     self->headers = HeaderSet_create();
     self->body = 0;
     self->headerBuf = 0;
@@ -261,19 +263,22 @@ static void sendBody(void *receiver, void *sender, void *args)
 
     HttpResponse *self = receiver;
     PSC_Connection *conn = sender;
-    size_t remaining = self->bodySize - self->sendPos;
-    if (!remaining)
+    do
     {
-	PSC_Event_unregister(PSC_Connection_closed(conn), self,
-		abortSending, 0);
-	PSC_Event_unregister(PSC_Connection_dataSent(conn), self, sendBody, 0);
-	PSC_Event_raise(self->sent, 0, conn);
-	return;
-    }
-    if (remaining > UINT16_MAX) remaining = UINT16_MAX;
-    PSC_Connection_sendAsync(conn, self->body + self->sendPos,
-	    (uint16_t)remaining, self);
-    self->sendPos += remaining;
+	if (self->remaining) self->sendPos += self->remaining;
+	self->remaining = self->bodySize - self->sendPos;
+	if (!self->remaining)
+	{
+	    PSC_Event_unregister(PSC_Connection_closed(conn), self,
+		    abortSending, 0);
+	    PSC_Event_unregister(PSC_Connection_dataSent(conn), self,
+		    sendBody, 0);
+	    PSC_Event_raise(self->sent, 0, conn);
+	    return;
+	}
+	if (self->remaining > UINT16_MAX) self->remaining = UINT16_MAX;
+    } while (PSC_Connection_sendAsync(conn, self->body + self->sendPos,
+		    (uint16_t)self->remaining, self) >= 0);
 }
 
 static void abortSending(void *receiver, void *sender, void *args)
@@ -284,6 +289,7 @@ static void abortSending(void *receiver, void *sender, void *args)
     PSC_Connection *conn = sender;
 
     self->sendPos = 0;
+    self->remaining = 0;
     PSC_Event_unregister(PSC_Connection_closed(conn), self, abortSending, 0);
     PSC_Event_unregister(PSC_Connection_dataSent(conn), self, sendBody, 0);
     PSC_Event_raise(self->sent, 0, 0);
@@ -330,8 +336,10 @@ int HttpResponse_send(HttpResponse *self, PSC_Connection *conn)
     PSC_Event_register(PSC_Connection_dataSent(conn), self, sendBody, 0);
     PSC_Event_register(PSC_Connection_closed(conn), self, abortSending, 0);
     self->sendPos = 0;
+    self->remaining = 0;
     PSC_Connection_sendAsync(conn, self->headerBuf,
 	    headersize + statuslen + 13, self);
+    sendBody(self, conn, 0);
     return 1;
 }
 
