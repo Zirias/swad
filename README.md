@@ -316,6 +316,28 @@ The following build options are available:
 
   Default: `off`
 
+* `WITH_POSER_SIGNALFD` (bool, only for `BUNDLED_POSER=on`): Require
+  `signalfd`, fail the build if not available. Note that `kqueue` is always
+  preferred for handling signals if available.
+
+  Default: `off`
+
+* `WITHOUT_POSER_SIGNALFD` (bool, only for `BUNDLED_POSER=on`): Never use
+  `signalfd` even if detected.
+
+  Default: `off`
+
+* `WITH_POSER_TIMERFD` (bool, only for `BUNDLED_POSER=on`): Require
+  `timerfd`, fail the build if not available. Note that `kqueue` is always
+  preferred for providing timers if available.
+
+  Default: `off`
+
+* `WITHOUT_POSER_TIMERFD` (bool, only for `BUNDLED_POSER=on`): Never use
+  `timerfd` even if detected.
+
+  Default: `off`
+
 * `WITH_MAN` (bool): Build and install manpages.
 
   Default: `on`
