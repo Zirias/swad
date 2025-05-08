@@ -84,7 +84,9 @@ static Session *createSession(time_t now, char *id)
     pthread_mutex_init(&self->lock, 0);
     self->ctime = now;
     self->atime = now;
+    pthread_mutex_lock(&sessionlock);
     PSC_Dictionary_set(sessions, id, SID_LEN, self, 0);
+    pthread_mutex_unlock(&sessionlock);
     return self;
 }
 
@@ -222,17 +224,14 @@ void MW_Session(HttpContext *context)
 	const RemoteEntry *r = PSC_List_at(
 		ProxyList_get(context), ProxyList_firstTrusted(context));
 	const PSC_IpAddr *addr = RemoteEntry_addr(r);
-	pthread_mutex_lock(&sessionlock);
 	if (!RateLimit_check(createLimit, PSC_IpAddr_string(addr)))
 	{
-	    pthread_mutex_unlock(&sessionlock);
 	    HttpContext_setResponse(context,
 		    HttpResponse_createError(HTTP_TOOMANYREQUESTS, 0));
 	    return;
 	}
 	char newsid[SID_LEN+1];
 	self = createSession(now, newsid);
-	pthread_mutex_unlock(&sessionlock);
 	if (!self)
 	{
 	    PSC_Log_msg(PSC_L_ERROR,
