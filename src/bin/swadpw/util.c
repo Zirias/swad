@@ -2,6 +2,11 @@
 
 #include <stdlib.h>
 
+#ifdef NEED_WIPEMEM_MEMSET
+#  include <string.h>
+void *(* volatile wipemem_memset)(void *, int, size_t) = memset;
+#endif
+
 void *xmalloc(size_t sz)
 {
     void *p = malloc(sz);

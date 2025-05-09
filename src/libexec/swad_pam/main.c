@@ -17,6 +17,7 @@
 #  define wipemem(p, s) (void)explicit_bzero(p, s)
 #else
 #  include <stddef.h>
+#  include <string.h>
 static void *(* volatile wipemem_memset)(void *, int, size_t) = memset;
 #  define wipemem(p, s) wipemem_memset(p, 0, s)
 #endif
