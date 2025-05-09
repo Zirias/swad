@@ -528,6 +528,7 @@ static void readOption(Config *self, char *lp)
 	    self->cfg_pidfile = PSC_copystr(value);
 	    self->pidfile = self->cfg_pidfile;
 	}
+	return;
     }
     if (!strcmp(key, "resolve_hosts"))
     {
