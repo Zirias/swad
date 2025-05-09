@@ -29,4 +29,8 @@ swadbcrypt_BUILDWITH=	#
 swadbcrypt_INSTALLWITH=	#
 swadbcrypt_STRIPWITH=	#
 
+ifneq ($(findstring -solaris,$(TARGETARCH)),)
+swadbcrypt_PRECFLAGS+=	-D__EXTENSIONS__
+endif
+
 $(call librules,swadbcrypt)

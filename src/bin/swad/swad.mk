@@ -78,6 +78,10 @@ swad_sysconf_FILES=	swad.conf.sample
 swad_swadconf_FILES=	style.css.sample:static/style.css \
 			$(foreach l,$(swad_TMPL),$l.html.sample:tmpl/$l.html)
 
+ifneq ($(findstring -solaris,$(TARGETARCH)),)
+swad_PRECFLAGS+=	-D__EXTENSIONS__
+endif
+
 ifeq ($(CRED_EXEC),1)
 swad_MODULES+=		cred/execchecker
 swad_DEFINES+=		-DCRED_EXEC

@@ -4,6 +4,7 @@ swadpw_MODULES=		config \
 			password \
 			pwfile \
 			util
+swadpw_PRECFLAGS=	$(swad_PRECFLAGS)
 swadpw_DEFINES=		$(swad_DEFINES)
 swadpw_INCLUDES=	-I./include/swadbcrypt
 swadpw_STATICDEPS=	swadbcrypt
