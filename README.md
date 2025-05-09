@@ -296,6 +296,16 @@ The following build options are available:
 
   Default: `4096`
 
+* `WITH_POSER_EVPORTS` (bool, only for `BUNDLED_POSER=on`): Require event
+  ports, fail the build if they are not available.
+
+  Default: `off`
+
+* `WITHOUT_POSER_EVPORTS` (bool, only for `BUDNLED_POSER=on`): Never use
+   event ports even if detected.
+
+  Default: `off`
+
 * `WITH_POSER_EPOLL` (bool, only for `BUNDLED_POSER=on`): Require `epoll()`,
   fail the build if `epoll()` is not available.
 
@@ -328,8 +338,8 @@ The following build options are available:
   Default: `off`
 
 * `WITH_POSER_TIMERFD` (bool, only for `BUNDLED_POSER=on`): Require
-  `timerfd`, fail the build if not available. Note that `kqueue` is always
-  preferred for providing timers if available.
+  `timerfd`, fail the build if not available. Note that `event ports` or
+  `kqueue` are always preferred for providing timers if available.
 
   Default: `off`
 
