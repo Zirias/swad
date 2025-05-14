@@ -8,7 +8,6 @@
 #include "../http/httpresponse.h"
 #include "../http/httpstatus.h"
 #include "../proxylist.h"
-#include "../ratelimit.h"
 #include "cookies.h"
 
 #include <poser/core.h>
@@ -41,8 +40,8 @@ static unsigned maxidle = MAXIDLE;
 	|| (n) - (s).ctime > maxage)
 
 static PSC_Dictionary *sessions;
-static RateLimitOpts *createLimitOpts;
-static RateLimit *createLimit;
+static PSC_RateLimitOpts *createLimitOpts;
+static PSC_RateLimit *createLimit;
 static time_t cleantime;
 static pthread_mutex_t sessionlock;
 static pthread_mutex_t cleanlock;
@@ -141,28 +140,28 @@ void Session_setProp(Session *self, const char *name,
     pthread_mutex_unlock(&self->lock);
 }
 
-static RateLimitOpts *createDefaultLimitOpts(void)
+static PSC_RateLimitOpts *createDefaultLimitOpts(void)
 {
-    RateLimitOpts *opts = RateLimitOpts_create(1);
-    RateLimitOpts_addLimit(opts, 5, 3);
-    RateLimitOpts_addLimit(opts, 60, 5);
-    RateLimitOpts_addLimit(opts, 3600, 25);
+    PSC_RateLimitOpts *opts = PSC_RateLimitOpts_create(1);
+    PSC_RateLimitOpts_addLimit(opts, 5, 3);
+    PSC_RateLimitOpts_addLimit(opts, 60, 5);
+    PSC_RateLimitOpts_addLimit(opts, 3600, 25);
     return opts;
 }
 
-void MW_SessionOpts_setCreateLimit(RateLimitOpts *opts)
+void MW_SessionOpts_setCreateLimit(PSC_RateLimitOpts *opts)
 {
     if ((!opts && !createLimitOpts) ||
 	    (opts && createLimitOpts &&
-	     RateLimitOpts_equals(createLimitOpts, opts)))
+	     PSC_RateLimitOpts_equals(createLimitOpts, opts)))
     {
-	RateLimitOpts_destroy(opts);
+	PSC_RateLimitOpts_destroy(opts);
 	return;
     }
 
     int ischange = !!createLimit;
     if (ischange) pthread_mutex_lock(&sessionlock);
-    RateLimit_destroy(createLimit);
+    PSC_RateLimit_destroy(createLimit);
     createLimitOpts = opts;
     if (ischange)
     {
@@ -172,9 +171,9 @@ void MW_SessionOpts_setCreateLimit(RateLimitOpts *opts)
 	    opts = createDefaultLimitOpts();
 	    mustfree = 1;
 	}
-	createLimit = RateLimit_create(opts);
+	createLimit = PSC_RateLimit_create(opts);
 	pthread_mutex_unlock(&sessionlock);
-	if (mustfree) RateLimitOpts_destroy(opts);
+	if (mustfree) PSC_RateLimitOpts_destroy(opts);
     }
 }
 
@@ -189,15 +188,15 @@ void MW_Session_init(void)
     pthread_mutex_init(&sessionlock, 0);
     pthread_mutex_init(&cleanlock, 0);
     cleantime = time(0);
-    RateLimitOpts *opts = createLimitOpts;
+    PSC_RateLimitOpts *opts = createLimitOpts;
     int mustfree = 0;
     if (!opts)
     {
 	opts = createDefaultLimitOpts();
 	mustfree = 1;
     }
-    createLimit = RateLimit_create(opts);
-    if (mustfree) RateLimitOpts_destroy(opts);
+    createLimit = PSC_RateLimit_create(opts);
+    if (mustfree) PSC_RateLimitOpts_destroy(opts);
     sessions = PSC_Dictionary_create(deleteSession);
 }
 
@@ -223,8 +222,8 @@ void MW_Session(HttpContext *context)
     {
 	const RemoteEntry *r = PSC_List_at(
 		ProxyList_get(context), ProxyList_firstTrusted(context));
-	const PSC_IpAddr *addr = RemoteEntry_addr(r);
-	if (!RateLimit_check(createLimit, PSC_IpAddr_string(addr)))
+	const char *addr = PSC_IpAddr_string(RemoteEntry_addr(r));
+	if (!PSC_RateLimit_check(createLimit, addr, strlen(addr)))
 	{
 	    HttpContext_setResponse(context,
 		    HttpResponse_createError(HTTP_TOOMANYREQUESTS, 0));
@@ -263,8 +262,8 @@ done:
 
 void MW_Session_done(void)
 {
-    RateLimit_destroy(createLimit);
-    RateLimitOpts_destroy(createLimitOpts);
+    PSC_RateLimit_destroy(createLimit);
+    PSC_RateLimitOpts_destroy(createLimitOpts);
     createLimit = 0;
     createLimitOpts = 0;
     PSC_Dictionary_destroy(sessions);

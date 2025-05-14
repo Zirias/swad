@@ -3,7 +3,6 @@
 #include "authenticator.h"
 
 #include "middleware/session.h"
-#include "ratelimit.h"
 #include "tmpl.h"
 
 #include <fcntl.h>
@@ -20,7 +19,7 @@ typedef struct AuthInfo
 {
     User *user;
     PSC_HashTable *blocks;
-    RateLimit *failLimit;
+    PSC_RateLimit *failLimit;
     unsigned version;
     unsigned limitVersion;
 } AuthInfo;
@@ -29,7 +28,7 @@ typedef struct Realm
 {
     const char *name;
     PSC_List *checkers;
-    RateLimitOpts *limitOpts;
+    PSC_RateLimitOpts *limitOpts;
     uint8_t *t_login;
     uint8_t *t_logout;
     size_t t_login_sz;
@@ -56,7 +55,7 @@ struct User
 
 static PSC_HashTable *checkers;
 static PSC_HashTable *realms;
-static RateLimitOpts *defaultLimitOpts;
+static PSC_RateLimitOpts *defaultLimitOpts;
 static unsigned defLimitVersion;
 
 static pthread_mutex_t authlock;
@@ -95,7 +94,7 @@ static void deleteRealm(void *obj)
     Realm *realm = obj;
     free(realm->t_logout);
     free(realm->t_login);
-    RateLimitOpts_destroy(realm->limitOpts);
+    PSC_RateLimitOpts_destroy(realm->limitOpts);
     PSC_List_destroy(realm->checkers);
     free(realm);
 }
@@ -104,7 +103,7 @@ static void deleteAuthInfo(void *obj)
 {
     if (!obj) return;
     AuthInfo *self = obj;
-    RateLimit_destroy(self->failLimit);
+    PSC_RateLimit_destroy(self->failLimit);
     PSC_HashTable_destroy(self->blocks);
     deleteUser(self->user);
     free(self);
@@ -242,27 +241,27 @@ done:
     return result;
 }
 
-static RateLimit *getLimits(Authenticator *self)
+static PSC_RateLimit *getLimits(Authenticator *self)
 {
     AuthInfo *authInfo = getAuthInfo(self, 1);
     if (authInfo->limitVersion != self->realm->limitVersion)
     {
-	RateLimit_destroy(authInfo->failLimit);
+	PSC_RateLimit_destroy(authInfo->failLimit);
 	authInfo->failLimit = 0;
     }
     if (!authInfo->failLimit)
     {
-	RateLimitOpts *limitOpts = self->realm->limitOpts;
+	PSC_RateLimitOpts *limitOpts = self->realm->limitOpts;
 	if (!limitOpts)
 	{
 	    if (!defaultLimitOpts)
 	    {
-		defaultLimitOpts = RateLimitOpts_create(0);
-		RateLimitOpts_addLimit(defaultLimitOpts, 15 * 60, 5);
+		defaultLimitOpts = PSC_RateLimitOpts_create(0);
+		PSC_RateLimitOpts_addLimit(defaultLimitOpts, 15 * 60, 5);
 	    }
 	    limitOpts = defaultLimitOpts;
 	}
-	authInfo->failLimit = RateLimit_create(limitOpts);
+	authInfo->failLimit = PSC_RateLimit_create(limitOpts);
 	authInfo->limitVersion = self->realm->limitVersion;
     }
     return authInfo->failLimit;
@@ -279,7 +278,7 @@ AuthResult Authenticator_login(Authenticator *self,
     if (authInfo && authInfo->blocks &&
 	    PSC_HashTable_get(authInfo->blocks, user))
     {
-	if (RateLimit_check(getLimits(self), user))
+	if (PSC_RateLimit_check(getLimits(self), user, strlen(user)))
 	{
 	    PSC_HashTable_delete(authInfo->blocks, user);
 	}
@@ -318,7 +317,7 @@ AuthResult Authenticator_login(Authenticator *self,
 
     if (result == AR_FAILED)
     {
-	if (!RateLimit_check(getLimits(self), user))
+	if (!PSC_RateLimit_check(getLimits(self), user, strlen(user)))
 	{
 	    result = AR_BLOCKED;
 	    if (!authInfo) authInfo = getAuthInfo(self, 1);
@@ -410,17 +409,17 @@ void Authenticator_init(void)
     defLimitVersion = 0;
 }
 
-void Authenticator_setDefaultLimit(RateLimitOpts *limitOpts)
+void Authenticator_setDefaultLimit(PSC_RateLimitOpts *limitOpts)
 {
     if ((!defaultLimitOpts && !limitOpts) ||
 	    (defaultLimitOpts && limitOpts &&
-	     RateLimitOpts_equals(defaultLimitOpts, limitOpts)))
+	     PSC_RateLimitOpts_equals(defaultLimitOpts, limitOpts)))
     {
-	RateLimitOpts_destroy(limitOpts);
+	PSC_RateLimitOpts_destroy(limitOpts);
     }
     else
     {
-	RateLimitOpts_destroy(defaultLimitOpts);
+	PSC_RateLimitOpts_destroy(defaultLimitOpts);
 	defaultLimitOpts = limitOpts;
 	defLimitVersion += 2U;
     }
@@ -433,7 +432,7 @@ void Authenticator_registerChecker(
 }
 
 void Authenticator_registerRealm(const char *name, const char *tmplPath,
-	PSC_List *checkerNames, RateLimitOpts *limitOpts)
+	PSC_List *checkerNames, PSC_RateLimitOpts *limitOpts)
 {
     Realm *realm = PSC_HashTable_get(realms, name);
     if (realm)
@@ -463,13 +462,13 @@ void Authenticator_registerRealm(const char *name, const char *tmplPath,
 	}
 	if ((!realm->limitOpts && !limitOpts) ||
 		(realm->limitOpts && limitOpts &&
-		 RateLimitOpts_equals(realm->limitOpts, limitOpts)))
+		 PSC_RateLimitOpts_equals(realm->limitOpts, limitOpts)))
 	{
-	    RateLimitOpts_destroy(limitOpts);
+	    PSC_RateLimitOpts_destroy(limitOpts);
 	}
 	else
 	{
-	    RateLimitOpts_destroy(realm->limitOpts);
+	    PSC_RateLimitOpts_destroy(realm->limitOpts);
 	    realm->limitOpts = limitOpts;
 	    if (limitOpts)
 	    {
@@ -514,7 +513,7 @@ void Authenticator_done(void)
     pthread_mutex_destroy(&authlock);
     PSC_HashTable_destroy(realms);
     PSC_HashTable_destroy(checkers);
-    RateLimitOpts_destroy(defaultLimitOpts);
+    PSC_RateLimitOpts_destroy(defaultLimitOpts);
     defaultLimitOpts = 0;
 }
 

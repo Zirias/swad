@@ -13,7 +13,7 @@ C_CLASS_DECL(User);
 
 C_CLASS_DECL(HttpContext);
 C_CLASS_DECL(PSC_List);
-C_CLASS_DECL(RateLimitOpts);
+C_CLASS_DECL(PSC_RateLimitOpts);
 C_CLASS_DECL(Session);
 
 typedef enum AuthResult
@@ -59,12 +59,12 @@ const char *User_username(const User *self) CMETHOD ATTR_RETNONNULL;
 const char *User_realname(const User *self) CMETHOD;
 
 void Authenticator_init(void);
-void Authenticator_setDefaultLimit(RateLimitOpts *limitOpts);
+void Authenticator_setDefaultLimit(PSC_RateLimitOpts *limitOpts);
 void Authenticator_registerChecker(
 	const char *name, CredentialsChecker *checker)
     ATTR_NONNULL((1)) ATTR_NONNULL((2));
 void Authenticator_registerRealm(const char *name, const char *tmplPath,
-	PSC_List *checkers, RateLimitOpts *limitOpts)
+	PSC_List *checkers, PSC_RateLimitOpts *limitOpts)
     ATTR_NONNULL((1)) ATTR_NONNULL((2)) ATTR_NONNULL((3));
 void Authenticator_lockAndClear(void);
 void Authenticator_removeRealm(const char *name) ATTR_NONNULL((1));

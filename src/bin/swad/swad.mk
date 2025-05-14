@@ -46,7 +46,6 @@ swad_MODULES=		authenticator \
 			middleware/pathparser \
 			middleware/session \
 			proxylist \
-			ratelimit \
 			staticfiles \
 			template \
 			tmpl \

@@ -14,7 +14,6 @@
 #include "middleware/formdata.h"
 #include "middleware/pathparser.h"
 #include "middleware/session.h"
-#include "ratelimit.h"
 
 #ifdef CRED_EXEC
 #  include "cred/execchecker.h"
@@ -167,13 +166,13 @@ static CredentialsChecker *createPowChecker(const CfgChecker *ccfg)
 
 static void configureSession(void)
 {
-    RateLimitOpts *limitOpts = 0;
+    PSC_RateLimitOpts *limitOpts = 0;
     uint16_t seconds;
     uint16_t limit;
     for (size_t i = 0; Config_sessionLimit(cfg, i, &seconds, &limit); ++i)
     {
-	if (!limitOpts) limitOpts = RateLimitOpts_create(1);
-	RateLimitOpts_addLimit(limitOpts, seconds, limit);
+	if (!limitOpts) limitOpts = PSC_RateLimitOpts_create(1);
+	PSC_RateLimitOpts_addLimit(limitOpts, seconds, limit);
     }
     MW_SessionOpts_setCreateLimit(limitOpts);
     MW_SessionOpts_setMaxAge(
@@ -182,13 +181,13 @@ static void configureSession(void)
 
 static void configureAuthenticator(void)
 {
-    RateLimitOpts *limitOpts = 0;
+    PSC_RateLimitOpts *limitOpts = 0;
     uint16_t seconds;
     uint16_t limit;
     for (size_t i = 0; Config_loginFailLimit(cfg, i, &seconds, &limit); ++i)
     {
-	if (!limitOpts) limitOpts = RateLimitOpts_create(0);
-	RateLimitOpts_addLimit(limitOpts, seconds, limit);
+	if (!limitOpts) limitOpts = PSC_RateLimitOpts_create(0);
+	PSC_RateLimitOpts_addLimit(limitOpts, seconds, limit);
     }
     Authenticator_setDefaultLimit(limitOpts);
     limitOpts = 0;
@@ -282,8 +281,8 @@ static void configureAuthenticator(void)
 	for (size_t j = 0;
 		CfgRealm_loginFailLimit(r, j, &seconds, &limit); ++j)
 	{
-	    if (!limitOpts) limitOpts = RateLimitOpts_create(0);
-	    RateLimitOpts_addLimit(limitOpts, seconds, limit);
+	    if (!limitOpts) limitOpts = PSC_RateLimitOpts_create(0);
+	    PSC_RateLimitOpts_addLimit(limitOpts, seconds, limit);
 	}
 	Authenticator_registerRealm(CfgRealm_name(r),
 		Config_resourceDir(cfg), checkerNames, limitOpts);
