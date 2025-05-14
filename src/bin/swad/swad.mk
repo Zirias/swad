@@ -128,7 +128,7 @@ swad_LIBS+=		posercore $(posercore_LIBS)
 swad_LDFLAGS+=		$(posercore_LDFLAGS)
 swad_PKGDEPS+=		$(posercore_PKGDEPS)
 else
-swad_PKGDEPS+=		posercore >= 1.2.3
+swad_PKGDEPS+=		posercore >= 2.0
 endif
 
 ifeq ($(WITH_MAN),1)
