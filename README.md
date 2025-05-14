@@ -28,9 +28,13 @@ basically the same thing also known from `Anubis`, see
 
 * Small and efficient C code base with almost no external dependencies
 * Reactor pattern with an attached thread pool to run the request pipelines
-* Support for `kqueue` (on BSD systems) and `epoll` (on Linux) for obtaining
-  events from the system, with fallback to `select` or, as a build option,
-  `poll`, for POSIX portability
+* Support for `kqueue` (on BSD systems), `epoll` (on Linux) and `event ports`
+  (on Solaris/Illumos) for obtaining events from the system, with fallback to
+  `select` or, as a build option, `poll`, for POSIX portability. `kqueue` is
+  also used for signals and timers if available, `event ports` for timers.
+  Furthermore, `signalfd` is supported for signals and `timerfd` for timers.
+  As fallbacks, signal handling is done with classic POSIX async signal
+  handlers and timers use multiplexing on top of `setitimer()`.
 * Support for POSIX user context switching, allowing to release a worker
   thread while waiting for some async I/O
 * Reliable pidfile handling with locks to automatically detect stale pidfiles
