@@ -10,7 +10,6 @@
 #include "httpserver.h"
 #include "middleware/compress.h"
 #include "middleware/cookies.h"
-#include "middleware/csrfprotect.h"
 #include "middleware/formdata.h"
 #include "middleware/pathparser.h"
 #include "middleware/session.h"
@@ -63,7 +62,6 @@ static void setupPipeline(HttpServer *server)
     HttpServer_addMiddleware(server, MW_Session);
     HttpServer_addMiddleware(server, MW_PathParser);
     HttpServer_addMiddleware(server, MW_FormData);
-    HttpServer_addMiddleware(server, MW_CSRFProtect);
 
     HttpServer_addRoute(server, Config_staticRoute(cfg),
 	    staticHandler, HTTP_GET, 0);

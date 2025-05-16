@@ -1,11 +1,11 @@
 #include "csrfprotect.h"
 
-#include "../http/httpcontext.h"
-#include "../http/httprequest.h"
-#include "../http/httpresponse.h"
-#include "../http/httpstatus.h"
-#include "formdata.h"
-#include "session.h"
+#include "http/httpcontext.h"
+#include "http/httprequest.h"
+#include "http/httpresponse.h"
+#include "http/httpstatus.h"
+#include "middleware/formdata.h"
+#include "middleware/session.h"
 
 #include <poser/core.h>
 #include <pthread.h>
@@ -63,42 +63,33 @@ const char *CSRFProtect_token(HttpContext *context, const char *path)
     return token;
 }
 
-void MW_CSRFProtect(HttpContext *context)
+int CSRFProtect_verify(HttpContext *context)
 {
     const FormData *form = FormData_get(context);
-    if (form)
+    if (!form) goto fail;
+    const char *tokenVal = FormData_single(form, PROPNAME, 0);
+    if (!tokenVal) goto fail;
+    Session *session = Session_get(context);
+    if (!session) goto fail;
+    CSRFTokens *tokens = Session_getProp(session, PROPNAME);
+    if (!tokens) goto fail;
+    const char *path = HttpRequest_path(HttpContext_request(context));
+    pthread_mutex_lock(&tokens->lock);
+    const char *token = PSC_HashTable_get(tokens->tokens, path);
+    if (!token || strcmp(token, tokenVal))
     {
-	Session *session = Session_get(context);
-	if (!session)
-	{
-	    PSC_Log_msg(PSC_L_ERROR,
-		    "CSRFProtect middleware depends on Session middleware.");
-	    goto done;
-	}
-	CSRFTokens *tokens = Session_getProp(session, PROPNAME);
-	if (!tokens) goto done;
-	const char *path = HttpRequest_path(HttpContext_request(context));
-	pthread_mutex_lock(&tokens->lock);
-	const char *token = PSC_HashTable_get(tokens->tokens, path);
-	if (!token)
-	{
-	    pthread_mutex_unlock(&tokens->lock);
-	    goto done;
-	}
-
-	const char *tokenVal = FormData_single(form, PROPNAME, 0);
-	if (!tokenVal || strcmp(token, tokenVal))
-	{
-	    HttpContext_setResponse(context, HttpResponse_createError(
-			HTTP_FORBIDDEN, "Possible request tampering detected. "
-			"Authorization for submitting this form refused."));
-	    pthread_mutex_unlock(&tokens->lock);
-	    return;
-	}
-	PSC_HashTable_delete(tokens->tokens, path);
 	pthread_mutex_unlock(&tokens->lock);
+	goto fail;
     }
-done:
-    HttpContext_callNext(context);
+    PSC_HashTable_delete(tokens->tokens, path);
+    pthread_mutex_unlock(&tokens->lock);
+    return 1;
+
+fail:
+    HttpContext_setResponse(context, HttpResponse_createError(
+		HTTP_FORBIDDEN, "Possible request tampering detected. "
+		"Authorization for submitting this form refused. "
+		"Check whether your browser allows session cookies."));
+    return 0;
 }
 

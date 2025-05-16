@@ -1,11 +1,11 @@
 #include "powchecker.h"
 
 #include "../authenticator.h"
+#include "../csrfprotect.h"
 #include "../handler/static.h"
 #include "../http/httpcontext.h"
 #include "../http/httpresponse.h"
 #include "../mediatype.h"
-#include "../middleware/csrfprotect.h"
 #include "../middleware/pathparser.h"
 #include "../middleware/session.h"
 #include "../template.h"

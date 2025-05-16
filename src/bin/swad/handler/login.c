@@ -1,13 +1,13 @@
 #include "login.h"
 
 #include "../authenticator.h"
+#include "../csrfprotect.h"
 #include "../http/header.h"
 #include "../http/headerset.h"
 #include "../http/httpcontext.h"
 #include "../http/httprequest.h"
 #include "../http/httpresponse.h"
 #include "../mediatype.h"
-#include "../middleware/csrfprotect.h"
 #include "../middleware/formdata.h"
 #include "../middleware/pathparser.h"
 #include "../middleware/session.h"
@@ -36,6 +36,7 @@ static const char *route = defroute;
 
 static void doLogin(HttpContext *context, Session *session)
 {
+    if (!CSRFProtect_verify(context)) return;
     HttpStatus status = HTTP_SEEOTHER;
     FormData *form = FormData_get(context);
     const char *rdr = 0;
