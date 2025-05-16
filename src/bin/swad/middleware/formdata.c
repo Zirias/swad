@@ -68,11 +68,16 @@ void FormData_wipe(FormData *self, const char *name)
 	if (!strcmp(name, self->params[p].name))
 	{
 	    free(self->params[p].name);
-	    self->params[p].name = 0;
 	    size_t len = strlen(self->params[p].value);
 	    wipemem(self->params[p].value, len);
 	    free(self->params[p].value);
-	    self->params[p].value = 0;
+	    if (p < self->nparams-1)
+	    {
+		memmove(self->params+p, self->params+p+1,
+			(self->nparams - p - 1) * sizeof *self->params);
+		--p;
+	    }
+	    --self->nparams;
 	}
     }
 }
