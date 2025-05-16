@@ -32,11 +32,13 @@ static const char *route = defroute;
 static void doLogin(HttpContext *context)
 {
     HttpStatus status = HTTP_SEEOTHER;
+    const char *rdr = loginHandler_route();
     FormData *form = FormData_get(context);
+    if (!form) goto done;
 
     size_t len = 0;
-    const char *rdr = FormData_single(form, "rdr", &len);
-    if (!rdr || len < 1 || len > 16384) goto done;
+    const char *authrdr = FormData_single(form, "rdr", &len);
+    if (!authrdr || len < 1 || len > 16384) goto done;
 
     const char *realm = FormData_single(form, "realm", &len);
     if (!realm || len < 1 || len > 1024) goto done;
@@ -55,6 +57,7 @@ static void doLogin(HttpContext *context)
 	if (result == AR_OK)
 	{
 	    status = HTTP_OK;
+	    rdr = authrdr;
 	    Session *session = Session_start(context);
 	    if (!session) return;
 	    Session_setProp(session, SK_ERROR, 0, 0);
@@ -69,7 +72,6 @@ static void doLogin(HttpContext *context)
 	}
 	else
 	{
-	    rdr = loginHandler_route();
 	    Session *session = Session_start(context);
 	    if (!session) return;
 	    if (result == AR_BLOCKED)
@@ -97,6 +99,7 @@ static void doLogin(HttpContext *context)
 	{
 	    Authenticator_logout(auth);
 	    status = HTTP_OK;
+	    rdr = authrdr;
 	}
 	Authenticator_destroy(auth);
     }
