@@ -187,7 +187,7 @@ HttpResponse *HttpResponse_createRedirect(
     char sizeStr[64];
     snprintf(sizeStr, 64, "%zu", contentSize);
     HeaderSet_set(self->headers, Header_create("Content-Length", sizeStr));
-    if (status <= 300 && status < 400)
+    if (status >= 300 && status < 400)
     {
 	HeaderSet_set(self->headers, Header_create("Location", location));
     }
