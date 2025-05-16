@@ -1218,9 +1218,18 @@ PSC_LogLevel Config_logLevel(const Config *self)
     else return (self->logLevel);
 }
 
+static const uint16_t defSessionSeconds[] = { 5, 60, 3600 };
+static const uint16_t defSessionLimits[] = { 3, 5, 25 };
 int Config_sessionLimit(const Config *self,
 	size_t num, uint16_t *seconds, uint16_t *limit)
 {
+    if (!self->nsessionLimits)
+    {
+	if (num >= 3) return 0;
+	*seconds = defSessionSeconds[num];
+	*limit = defSessionLimits[num];
+	return 1;
+    }
     if (num >= self->nsessionLimits) return 0;
     *seconds = self->sessionSeconds[num];
     *limit = self->sessionLimits[num];

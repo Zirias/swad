@@ -39,7 +39,7 @@ typedef struct Realm
 
 struct Authenticator
 {
-    Session *session;
+    HttpContext *context;
     PSC_HashTable *authInfos;
     const char *realmnm;
     const Realm *realm;
@@ -114,8 +114,10 @@ static void deleteAuthInfos(void *obj)
     PSC_HashTable_destroy(obj);
 }
 
-static PSC_HashTable *getAuthInfos(Session *session)
+static PSC_HashTable *getAuthInfos(HttpContext *context)
 {
+    Session *session = Session_get(context);
+    if (!session) return 0;
     PSC_HashTable *authInfos = Session_getProp(session, SESSKEY);
     if (!authInfos)
     {
@@ -125,11 +127,11 @@ static PSC_HashTable *getAuthInfos(Session *session)
     return authInfos;
 }
 
-Authenticator *Authenticator_create(Session *session, const char *realm)
+Authenticator *Authenticator_create(HttpContext *context, const char *realm)
 {
     Authenticator *self = PSC_malloc(sizeof *self);
-    self->session = session;
-    self->authInfos = getAuthInfos(session);
+    self->context = context;
+    self->authInfos = getAuthInfos(context);
     self->realmnm = realm ? realm : DEFAULT_REALM;
     self->realm = PSC_HashTable_get(realms, self->realmnm);
     self->deviate = 0;
@@ -138,6 +140,15 @@ Authenticator *Authenticator_create(Session *session, const char *realm)
 
 static AuthInfo *getAuthInfo(Authenticator *self, int create)
 {
+    if (!self->authInfos)
+    {
+	if (create)
+	{
+	    if (!Session_start(self->context)) return 0;
+	    self->authInfos = getAuthInfos(self->context);
+	}
+	return 0;
+    }
     AuthInfo *authInfo = PSC_HashTable_get(self->authInfos, self->realmnm);
     if (self->realm && authInfo && authInfo->version != self->realm->version)
     {
@@ -196,15 +207,16 @@ const uint8_t *Authenticator_logoutTmpl(const Authenticator *self, size_t *sz)
     return tmpl;
 }
 
-Session *Authenticator_session(const Authenticator *self)
+HttpContext *Authenticator_context(const Authenticator *self)
 {
-    return self->session;
+    return self->context;
 }
 
 AuthResult Authenticator_silentLogin(Authenticator *self)
 {
     AuthResult result = AR_FAILED;
-    if (!self->realm || !PSC_List_size(self->realm->checkers)) return result;
+    if (!self->realm || !self->authInfos
+	    || !PSC_List_size(self->realm->checkers)) return result;
     pthread_mutex_lock(&authlock);
     PSC_HashTableIterator *i = 0;
     PSC_ListIterator *j = 0;
@@ -297,19 +309,16 @@ AuthResult Authenticator_login(Authenticator *self,
 	{
 	    char *realname = 0;
 	    result = checker->check(checker, user, pw, self, &realname);
-	    if (result == AR_OK || result == AR_DEVIATE)
+	    if (result == AR_OK)
 	    {
 		if (!authInfo) authInfo = getAuthInfo(self, 1);
 		deleteUser(authInfo->user);
-		if (result == AR_OK)
-		{
-		    authInfo->user = createUser(user, realname, checkerName);
-		    authInfo->version = self->realm->version;
-		}
-		else
-		{
-		    self->deviate = checker;
-		}
+		authInfo->user = createUser(user, realname, checkerName);
+		authInfo->version = self->realm->version;
+	    }
+	    else if (result == AR_DEVIATE)
+	    {
+		self->deviate = checker;
 	    }
 	}
     }
@@ -332,10 +341,10 @@ done:
     return result;
 }
 
-int Authenticator_deviate(Authenticator *self, HttpContext *context)
+int Authenticator_deviate(Authenticator *self)
 {
     if (!self->deviate || !self->deviate->deviate) return -1;
-    self->deviate->deviate(self->deviate, self, context);
+    self->deviate->deviate(self->deviate, self);
     return 0;
 }
 

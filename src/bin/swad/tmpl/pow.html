@@ -29,7 +29,8 @@
     </p>
     <form action="%%SELF%%" method="post" autocomplete="off"
 	  data-challenge="%%CHALLENGE%%" data-difficulty="%%DIFFICULTY%%">
-      <input type="hidden" name="%%CSRFNAME%%" value="%%CSRFTOKEN%%">
+      <input type="hidden" name="realm" value="%%REALM%%">
+      <input type="hidden" name="rdr" value="%%RDR%%">
       <input type="hidden" name="user" value="%%USER%%">
       <input type="hidden" name="pw">
       <input type="hidden" name="login" value="login">

@@ -44,7 +44,7 @@ static void deleteTokens(void *obj)
 
 const char *CSRFProtect_token(HttpContext *context, const char *path)
 {
-    Session *session = Session_get(context);
+    Session *session = Session_start(context);
     if (!session) return 0;
     CSRFTokens *tokens = Session_getProp(session, PROPNAME);
     if (!tokens)

@@ -105,19 +105,19 @@ which takes precedence if both are present:
   - Query string: `rdr`
   - Header: `X-SWAD-Rdr`
 
-Both parameters are stored in the session. They are deleted when a new value
-is provided, or when an actual login is performed. For security reasons,
-the login endpoint ignores these parameters for the actual login request, but
-accepts them for rendering the login form. The auth endpoint ignores the
-redirect uri if the user is already authenticated.
+The login endpoint ignores these parameters for the actual login request with
+POST, it expects realm and redirect as hidden form fields instead. The auth
+endpoint only needs the realm name, but will use the redirect uri if present
+to add a query parameter in the redirect to the login page and for a log
+message telling for which path a login was requested if an unauthenticated
+access was tried.
 
 ### Endpoint details
 
 * `/`, method `GET`: Check current authentication.
   - response `200`: Returned if the user is authenticated for the given realm.
     Returns a `text/plain` document containing the user name and, if
-    available, the user's real name in a second line. Ignores the redirect uri
-    parameter described above.
+    available, the user's real name in a second line.
   - response `403`: Returned if the user is not yet authenticated for the
     given realm. Returns a `text/html` document with a redirect to the login
     route.
@@ -125,7 +125,7 @@ redirect uri if the user is already authenticated.
 * `/login`, methods `GET` and `POST`: Perform login and redirect back.
   - `GET`: Show the login form. Accepts the standard parameters descibed
     above.
-    + response `200`: Returns a `text/plain` document with a HTML login form
+    + response `200`: Returns a `text/html` document with a HTML login form
       and the requested realm shown in the title.
   - `POST`: Perform login. Ignores the standard parameters described above.
     + response `303`: Returned on failed login, redirects back to the login
@@ -146,8 +146,8 @@ and an authentication realm called `Secret`. For details how to configure
 
 ```Nginx
 location @auth403 {
-    add_header Set-Cookie $auth_cookie;
-    return 303 /login;
+    set $auth_rdr $request_uri;
+    rewrite ^ /login last;
 }
 
 location /secret {
@@ -167,6 +167,8 @@ location /secret {
 location = /login {
     proxy_pass https://swad.example.com:8443/login;
     proxy_http_version 1.1;
+    proxy_set_header X-SWAD-Realm $auth_realm;
+    proxy_set_header X-SWAD-Rdr $auth_rdr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 }
 
@@ -194,14 +196,16 @@ Some key aspects to make this work are:
 * We make sure to always pass `Set-Cookie` headers from `swad`. Otherwise,
   `swad` couldn't correctly establish the user session.
 * We always pass the realm and redirect uri with every request checking
-  authentication. This makes sure a login will use whatever was requested
-  last when authentication failed.
+  authentication. The realm is strictly needed for checking authentication,
+  the redirect uri is only used for logging here.
 * We always add an `X-Forwarded-For` header, so `swad` knows the real remote
   address and can base its rate limits on this information, as well as log it.
 * We provide a redirect to login in nginx, via `proxy_intercept_errors` and
   `@auth403` for the error document. This is unfortunately necessery,
   because nginx' `auth_request` can't pass a body from a `403` response, which
-  would already contain the required redirect.
+  would already contain the required redirect. Because of this, we also
+  must make sure to pass the correct parameters for realm and redirect uri to
+  the login endpoint.
 * We make sure to force the `GET` method and no request body for auth
   requests. `swad`'s authentication endpoint only supports `GET`.
 

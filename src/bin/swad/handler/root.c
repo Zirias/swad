@@ -9,7 +9,7 @@
 #include "../http/httpresponse.h"
 #include "../mediatype.h"
 #include "../middleware/pathparser.h"
-#include "../middleware/session.h"
+#include "../urlencode.h"
 
 #include <poser/core/log.h>
 #include <poser/core/util.h>
@@ -19,7 +19,7 @@
 
 void rootHandler(HttpContext *context)
 {
-    char responsebuf[4096];
+    char responsebuf[16384];
     HttpResponse *response = 0;
 
     const PathParser *pathParser = PathParser_get(context);
@@ -31,13 +31,10 @@ void rootHandler(HttpContext *context)
 	goto done;
     }
 
-    Session *session = Session_get(context);
-    if (!session) return;
-
     const HeaderSet *hdr = HttpRequest_headers(HttpContext_request(context));
     const char *realm = loginHandler_realm(hdr, pathParser);
 
-    Authenticator *auth = Authenticator_create(session, realm);
+    Authenticator *auth = Authenticator_create(context, realm);
     const User *user = Authenticator_user(auth);
     Authenticator_destroy(auth);
 
@@ -60,16 +57,17 @@ void rootHandler(HttpContext *context)
     else
     {
 	const char *rdr = loginHandler_rdr(hdr, pathParser);
-	Session_setProp(session, "auth_realm", PSC_copystr(realm), free);
-	Session_setProp(session, "auth_rdr", PSC_copystr(rdr), free);
 	const Header *uaHdr = HeaderSet_first(hdr, "User-Agent");
 	const char *ua = 0;
 	if (uaHdr) ua = Header_value(uaHdr);
 	if (!ua || !*ua) ua = "<Unknown>";
 	PSC_Log_fmt(PSC_L_INFO, "auth: requesting login: [realm] %s - "
 		"[path] %s - [user agent] %s", realm, rdr, ua);
-	response = HttpResponse_createRedirect(HTTP_FORBIDDEN,
-		loginHandler_route());
+	char *rdrenc = urlencode(rdr);
+	snprintf(responsebuf, sizeof responsebuf, "%s?realm=%s&rdr=%s",
+		loginHandler_route(), realm, rdrenc);
+	response = HttpResponse_createRedirect(HTTP_FORBIDDEN, responsebuf);
+	free(rdrenc);
     }
 
 done:

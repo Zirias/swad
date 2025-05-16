@@ -119,6 +119,44 @@ Session *Session_get(const HttpContext *context)
     return HttpContext_get(context, PROPNAME);
 }
 
+Session *Session_start(HttpContext *context)
+{
+    Session *session = Session_get(context);
+    if (session) return session;
+
+    Cookies *cookies = Cookies_get(context);
+    if (!cookies)
+    {
+	PSC_Log_msg(PSC_L_ERROR,
+		"Session middleware depends on Cookies middleware!");
+	return 0;
+    }
+    if (createLimit)
+    {
+	const RemoteEntry *r = PSC_List_at(
+		ProxyList_get(context), ProxyList_firstTrusted(context));
+	const char *addr = PSC_IpAddr_string(RemoteEntry_addr(r));
+	if (!PSC_RateLimit_check(createLimit, addr, strlen(addr)))
+	{
+	    HttpContext_setResponse(context,
+		    HttpResponse_createError(HTTP_TOOMANYREQUESTS, 0));
+	    return 0;
+	}
+    }
+    char newsid[SID_LEN+1];
+    time_t now = time(0);
+    session = createSession(now, newsid);
+    if (!session)
+    {
+	PSC_Log_msg(PSC_L_ERROR,
+		"Cannot obtain random data for new session id!");
+	return 0;
+    }
+    Cookies_setCookie(cookies, COOKIENAME, newsid);
+    HttpContext_set(context, PROPNAME, session, 0);
+    return session;
+}
+
 const char *Session_referrer(const Session *self)
 {
     return self->referrer;
@@ -140,15 +178,6 @@ void Session_setProp(Session *self, const char *name,
     pthread_mutex_unlock(&self->lock);
 }
 
-static PSC_RateLimitOpts *createDefaultLimitOpts(void)
-{
-    PSC_RateLimitOpts *opts = PSC_RateLimitOpts_create(1);
-    PSC_RateLimitOpts_addLimit(opts, 5, 3);
-    PSC_RateLimitOpts_addLimit(opts, 60, 5);
-    PSC_RateLimitOpts_addLimit(opts, 3600, 25);
-    return opts;
-}
-
 void MW_SessionOpts_setCreateLimit(PSC_RateLimitOpts *opts)
 {
     if ((!opts && !createLimitOpts) ||
@@ -159,22 +188,13 @@ void MW_SessionOpts_setCreateLimit(PSC_RateLimitOpts *opts)
 	return;
     }
 
-    int ischange = !!createLimit;
-    if (ischange) pthread_mutex_lock(&sessionlock);
+    pthread_mutex_lock(&sessionlock);
     PSC_RateLimit_destroy(createLimit);
+    PSC_RateLimitOpts_destroy(createLimitOpts);
     createLimitOpts = opts;
-    if (ischange)
-    {
-	int mustfree = 0;
-	if (!opts)
-	{
-	    opts = createDefaultLimitOpts();
-	    mustfree = 1;
-	}
-	createLimit = PSC_RateLimit_create(opts);
-	pthread_mutex_unlock(&sessionlock);
-	if (mustfree) PSC_RateLimitOpts_destroy(opts);
-    }
+    if (opts) createLimit = PSC_RateLimit_create(opts);
+    else createLimit = 0;
+    pthread_mutex_unlock(&sessionlock);
 }
 
 void MW_SessionOpts_setMaxAge(unsigned maxAge, unsigned maxIdle)
@@ -188,15 +208,6 @@ void MW_Session_init(void)
     pthread_mutex_init(&sessionlock, 0);
     pthread_mutex_init(&cleanlock, 0);
     cleantime = time(0);
-    PSC_RateLimitOpts *opts = createLimitOpts;
-    int mustfree = 0;
-    if (!opts)
-    {
-	opts = createDefaultLimitOpts();
-	mustfree = 1;
-    }
-    createLimit = PSC_RateLimit_create(opts);
-    if (mustfree) PSC_RateLimitOpts_destroy(opts);
     sessions = PSC_Dictionary_create(deleteSession);
 }
 
@@ -217,29 +228,8 @@ void MW_Session(HttpContext *context)
     if (self)
     {
 	self->atime = now;
+	HttpContext_set(context, PROPNAME, self, 0);
     }
-    else
-    {
-	const RemoteEntry *r = PSC_List_at(
-		ProxyList_get(context), ProxyList_firstTrusted(context));
-	const char *addr = PSC_IpAddr_string(RemoteEntry_addr(r));
-	if (!PSC_RateLimit_check(createLimit, addr, strlen(addr)))
-	{
-	    HttpContext_setResponse(context,
-		    HttpResponse_createError(HTTP_TOOMANYREQUESTS, 0));
-	    return;
-	}
-	char newsid[SID_LEN+1];
-	self = createSession(now, newsid);
-	if (!self)
-	{
-	    PSC_Log_msg(PSC_L_ERROR,
-		    "Cannot obtain random data for new session id!");
-	    goto done;
-	}
-	Cookies_setCookie(cookies, COOKIENAME, newsid);
-    }
-    HttpContext_set(context, PROPNAME, self, 0);
 
 done:
     HttpContext_callNext(context);

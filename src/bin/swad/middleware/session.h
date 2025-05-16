@@ -10,6 +10,7 @@ C_CLASS_DECL(HttpContext);
 typedef void (*ObjDeleter)(void *obj);
 
 Session *Session_get(const HttpContext *context) ATTR_NONNULL((1)) ATTR_PURE;
+Session *Session_start(HttpContext *context) ATTR_NONNULL((1));
 const char *Session_id(const Session *self) CMETHOD ATTR_RETNONNULL ATTR_PURE;
 const char *Session_referrer(const Session *self) CMETHOD ATTR_PURE;
 void *Session_getProp(Session *self, const char *name)

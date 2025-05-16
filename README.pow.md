@@ -64,7 +64,8 @@ the existing login form:
     <p>You may have your browser solve a<br>
     cryptographic puzzle to get guest access:</p>
     <form action="%%SELF%%" method="post">
-      <input type="hidden" name="%%CSRFNAME%%" value="%%CSRFTOKEN%%">
+      <input type="hidden" name="realm" value="%%REALM%%">
+      <input type="hidden" name="rdr" value="%%RDR%%">
       <input type="hidden" name="user" value="guest">
       <input type="hidden" name="pw" value="guest">
       <input type="hidden" name="login" value="login">

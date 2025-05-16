@@ -14,7 +14,6 @@ C_CLASS_DECL(User);
 C_CLASS_DECL(HttpContext);
 C_CLASS_DECL(PSC_List);
 C_CLASS_DECL(PSC_RateLimitOpts);
-C_CLASS_DECL(Session);
 
 typedef enum AuthResult
 {
@@ -30,13 +29,12 @@ struct CredentialsChecker
 	    const Authenticator *auth, char **realname)
 	CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3))
 	ATTR_NONNULL((4)) ATTR_NONNULL((5));
-    void (*deviate)(void *self, const Authenticator *auth,
-	    HttpContext *context)
-	CMETHOD ATTR_NONNULL((1)) ATTR_NONNULL((2));
+    void (*deviate)(void *self, const Authenticator *auth)
+	CMETHOD ATTR_NONNULL((1));
     void (*destroy)(void *self);
 };
 
-Authenticator *Authenticator_create(Session *session, const char *realm)
+Authenticator *Authenticator_create(HttpContext *context, const char *realm)
     ATTR_RETNONNULL;
 const User *Authenticator_user(const Authenticator *self) CMETHOD;
 const char *Authenticator_realm(const Authenticator *self) CMETHOD;
@@ -44,14 +42,13 @@ const uint8_t *Authenticator_loginTmpl(const Authenticator *self, size_t *sz)
     CMETHOD ATTR_NONNULL((2));
 const uint8_t *Authenticator_logoutTmpl(const Authenticator *self, size_t *sz)
     CMETHOD ATTR_NONNULL((2));
-Session *Authenticator_session(const Authenticator *self)
+HttpContext *Authenticator_context(const Authenticator *self)
     CMETHOD ATTR_RETNONNULL;
 AuthResult Authenticator_silentLogin(Authenticator *self) CMETHOD;
 AuthResult Authenticator_login(Authenticator *self,
 	const char *user, const char *pw)
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
-int Authenticator_deviate(Authenticator *self, HttpContext *context)
-    CMETHOD ATTR_NONNULL((2));
+int Authenticator_deviate(Authenticator *self) CMETHOD;
 void Authenticator_logout(Authenticator *self) CMETHOD;
 void Authenticator_destroy(Authenticator *self);
 

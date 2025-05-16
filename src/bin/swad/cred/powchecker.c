@@ -6,6 +6,7 @@
 #include "../http/httpcontext.h"
 #include "../http/httpresponse.h"
 #include "../mediatype.h"
+#include "../middleware/formdata.h"
 #include "../middleware/pathparser.h"
 #include "../middleware/session.h"
 #include "../template.h"
@@ -26,32 +27,34 @@ typedef struct PowChecker
     unsigned difficulty;
 } PowChecker;
 
-static void deviate(void *obj, const Authenticator *auth, HttpContext *context)
+static void deviate(void *obj, const Authenticator *auth)
 {
     PowChecker *self = obj;
 
+    HttpContext *context = Authenticator_context(auth);
+    const FormData *form = FormData_get(context);
+    if (!form) return;
     const PathParser *pathParser = PathParser_get(context);
     if (!pathParser) return;
-    const char *path = PathParser_path(pathParser);
-    const char *csrfToken = CSRFProtect_token(context, path);
-    if (!csrfToken) return;
-
+    Session *session = Session_start(context);
+    if (!session) return;
     char *challenge = PSC_Random_createStr(32, PSC_RF_NONBLOCK);
-    Session_setProp(Authenticator_session(auth), "_POW_CHALLENGE",
-	    challenge, free);
+    Session_setProp(session, "_POW_CHALLENGE", challenge, free);
 
     char difficulty[8];
     char stylelink[256];
     char scriptlink[256];
     snprintf(difficulty, sizeof difficulty, "%u", self->difficulty);
+    const char *path = PathParser_path(pathParser);
     staticHandler_link(stylelink, sizeof stylelink, path, "style.css");
     staticHandler_link(scriptlink, sizeof scriptlink, path, "pow.mjs");
 
+    const char *rdr = FormData_single(form, "rdr", 0);
+    if (!rdr || !*rdr) rdr = "/";
     Template *tmpl = Template_createStatic(tmpl_pow_html, tmpl_pow_html_sz);
     Template_setStaticVar(tmpl, "REALM", Authenticator_realm(auth), TF_HTML);
+    Template_setStaticVar(tmpl, "RDR", rdr, TF_HTML);
     Template_setStaticVar(tmpl, "SELF", path, TF_NONE);
-    Template_setStaticVar(tmpl, "CSRFNAME", CSRFProtect_name(), TF_NONE);
-    Template_setStaticVar(tmpl, "CSRFTOKEN", csrfToken, TF_NONE);
     Template_setStaticVar(tmpl, "USER", self->user, TF_HTML);
     Template_setStaticVar(tmpl, "CHALLENGE", challenge, TF_NONE);
     Template_setStaticVar(tmpl, "DIFFICULTY", difficulty, TF_NONE);
@@ -71,12 +74,13 @@ static AuthResult check(void *obj, const char *user, const char *pw,
 
     if (!strcmp(user, self->user))
     {
-	const char *challenge = Session_getProp(Authenticator_session(auth),
-		"_POW_CHALLENGE");
+	Session *session = Session_start(Authenticator_context(auth));
+	if (!session) return AR_FAILED;
+	const char *challenge = Session_getProp(session, "_POW_CHALLENGE");
 	if (!challenge) goto checkdeviate;
 	char tohash[128];
 	int tohashlen = snprintf(tohash, sizeof tohash, "%s%s", challenge, pw);
-	Session_setProp(Authenticator_session(auth), "_POW_CHALLENGE", 0, 0);
+	Session_setProp(session, "_POW_CHALLENGE", 0, 0);
 	unsigned char hash[SHA256_DIGEST_LENGTH];
 	SHA256((const unsigned char *)tohash, tohashlen, hash);
 	for (unsigned i = 0; i < self->difficulty; ++i)

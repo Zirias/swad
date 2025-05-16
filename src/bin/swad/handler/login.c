@@ -18,35 +18,28 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define SK_FORM	    "login_form"
-#define SK_RDR	    "login_rdr"
-#define SK_ARDR	    "auth_rdr"
-#define SK_REALM    "login_realm"
-#define SK_AREALM   "auth_realm"
-#define SK_USER	    "login_user"
-#define SK_ERROR    "login_error"
-
 #define QP_RDR	    "rdr"
 #define QP_REALM    "realm"
 #define HDR_RDR	    "X-SWAD-Rdr"
 #define HDR_REALM   "X-SWAD-Realm"
 
+#define SK_ERROR    "login_error"
+#define SK_USER	    "login_user"
+
 static const char defroute[] = "/login";
 static const char *route = defroute;
 
-static void doLogin(HttpContext *context, Session *session)
+static void doLogin(HttpContext *context)
 {
-    if (!CSRFProtect_verify(context)) return;
     HttpStatus status = HTTP_SEEOTHER;
     FormData *form = FormData_get(context);
-    const char *rdr = 0;
-    if (!form || !FormData_valid(form)) goto done;
-
-    const char *realm = Session_getProp(session, SK_REALM);
-    rdr = Session_getProp(session, SK_FORM);
-    if  (!realm || !rdr) goto done;
 
     size_t len = 0;
+    const char *rdr = FormData_single(form, "rdr", &len);
+    if (!rdr || len < 1 || len > 16384) goto done;
+
+    const char *realm = FormData_single(form, "realm", &len);
+    if (!realm || len < 1 || len > 1024) goto done;
 
     if (FormData_single(form, "login", 0))
     {
@@ -56,30 +49,29 @@ static void doLogin(HttpContext *context, Session *session)
 	const char *pw = FormData_single(form, "pw", &len);
 	if (!pw || len < 1 || len > 32) goto done;
 
-	const char *authrdr = Session_getProp(session, SK_RDR);
-	if (!authrdr) authrdr = "/";
-
-	Authenticator *auth = Authenticator_create(session, realm);
+	Authenticator *auth = Authenticator_create(context, realm);
 	AuthResult result = Authenticator_login(auth, user, pw);
 	FormData_wipe(form, "pw");
 	if (result == AR_OK)
 	{
 	    status = HTTP_OK;
-	    rdr = authrdr;
+	    Session *session = Session_start(context);
+	    if (!session) return;
 	    Session_setProp(session, SK_ERROR, 0, 0);
-	    Session_setProp(session, SK_AREALM, 0, 0);
-	    Session_setProp(session, SK_ARDR, 0, 0);
 	    PSC_Log_fmt(PSC_L_INFO, "login: %s logged in for %s",
 		    user, realm);
 	}
 	else if (result == AR_DEVIATE)
 	{
-	    Authenticator_deviate(auth, context);
+	    Authenticator_deviate(auth);
 	    Authenticator_destroy(auth);
 	    return;
 	}
 	else
 	{
+	    rdr = loginHandler_route();
+	    Session *session = Session_start(context);
+	    if (!session) return;
 	    if (result == AR_BLOCKED)
 	    {
 		Session_setProp(session, SK_ERROR,
@@ -93,18 +85,18 @@ static void doLogin(HttpContext *context, Session *session)
 		PSC_Log_fmt(PSC_L_WARNING, "login: Failed login as %s for %s",
 			user, realm);
 	    }
+	    Session_setProp(session, SK_USER, PSC_copystr(user), free);
 	}
-	Session_setProp(session, SK_USER, PSC_copystr(user), free);
 	Authenticator_destroy(auth);
     }
     else if (FormData_single(form, "logout", 0))
     {
-	Authenticator *auth = Authenticator_create(session, realm);
+	if (!CSRFProtect_verify(context)) return;
+	Authenticator *auth = Authenticator_create(context, realm);
 	if (Authenticator_user(auth))
 	{
 	    Authenticator_logout(auth);
 	    status = HTTP_OK;
-	    rdr = Session_getProp(session, SK_RDR);
 	}
 	Authenticator_destroy(auth);
     }
@@ -114,37 +106,40 @@ done:
     HttpContext_setResponse(context, HttpResponse_createRedirect(status, rdr));
 }
 
-static void showForm(HttpContext *context, Session *session,
-	const char *realm, const char *path)
+static void showForm(HttpContext *context, const PathParser *pathParser)
 {
-    Authenticator *auth = Authenticator_create(session, realm);
+    const HeaderSet *hdr = HttpRequest_headers(HttpContext_request(context));
+    const char *realm = loginHandler_realm(hdr, pathParser);
+    Authenticator *auth = Authenticator_create(context, realm);
     const User *user = Authenticator_user(auth);
     if (!user && Authenticator_silentLogin(auth) == AR_OK)
     {
 	user = Authenticator_user(auth);
 	Authenticator_destroy(auth);
-	Session_setProp(session, SK_ERROR, 0, 0);
+	Session *session = Session_get(context);
+	if (session) Session_setProp(session, SK_ERROR, 0, 0);
 	PSC_Log_fmt(PSC_L_INFO, "login: %s silently logged in for %s",
 		User_username(user), realm);
-	const char *rdr = Session_getProp(session, SK_RDR);
-	if (!rdr) rdr = "/";
 	HttpContext_setResponse(context,
-		HttpResponse_createRedirect(HTTP_OK, rdr));
+		HttpResponse_createRedirect(HTTP_OK,
+		    loginHandler_rdr(hdr, pathParser)));
 	return;
     }
     const uint8_t *tdata;
     size_t tsz;
-    if (user) tdata = Authenticator_logoutTmpl(auth, &tsz);
+    if (user)
+    {
+	const char *csrfToken = CSRFProtect_token(context, route);
+	if (!csrfToken)
+	{
+	    PSC_Log_msg(PSC_L_ERROR, "Cannot obtain CSRF protection token!");
+	    return;
+	}
+
+	tdata = Authenticator_logoutTmpl(auth, &tsz);
+    }
     else tdata = Authenticator_loginTmpl(auth, &tsz);
     Authenticator_destroy(auth);
-
-    const char *csrfToken = CSRFProtect_token(context, route);
-    if (!csrfToken)
-    {
-	PSC_Log_msg(PSC_L_ERROR, "Cannot obtain random data for CSRF "
-		"protection token!");
-	return;
-    }
 
     Template *tmpl = Template_createStatic(tdata, tsz);
     if (user)
@@ -157,17 +152,22 @@ static void showForm(HttpContext *context, Session *session,
     }
     else
     {
-	const char *le = Session_getProp(session, SK_ERROR);
-	if (le) Template_setStaticVar(tmpl, "ERRMSG", le, TF_HTML);
-	const char *lu = Session_getProp(session, SK_USER);
-	if (lu) Template_setStaticVar(tmpl, "USER", lu, TF_HTML);
+	Session *session = Session_get(context);
+	if (session)
+	{
+	    const char *le = Session_getProp(session, SK_ERROR);
+	    if (le) Template_setStaticVar(tmpl, "ERRMSG", le, TF_HTML);
+	    const char *lu = Session_getProp(session, SK_USER);
+	    if (lu) Template_setStaticVar(tmpl, "USER", lu, TF_HTML);
+	}
     }
-    Template_setStaticVar(tmpl, "CSRFNAME", CSRFProtect_name(), TF_NONE);
-    Template_setStaticVar(tmpl, "CSRFTOKEN", csrfToken, TF_NONE);
     Template_setStaticVar(tmpl, "REALM", realm, TF_HTML);
-    Template_setStaticVar(tmpl, "SELF", path, TF_NONE);
+    Template_setStaticVar(tmpl, "RDR",
+	    loginHandler_rdr(hdr, pathParser), TF_HTML);
+    Template_setStaticVar(tmpl, "SELF", PathParser_path(pathParser), TF_NONE);
     char stylelink[256];
-    staticHandler_link(stylelink, sizeof stylelink, path, "style.css");
+    staticHandler_link(stylelink, sizeof stylelink,
+	    PathParser_path(pathParser), "style.css");
     Template_setStaticVar(tmpl, "STYLELINK", stylelink, TF_NONE);
     HttpResponse *response = HttpResponse_create(HTTP_OK, MT_HTML);
     HttpResponse_passTextBody(response, Template_processHtml(tmpl));
@@ -175,47 +175,17 @@ static void showForm(HttpContext *context, Session *session,
     HttpContext_setResponse(context, response);
 }
 
-static const char *updateSession(HttpContext *context,
-	const PathParser *pathParser, Session *session)
-{
-    Session_setProp(session, SK_FORM, PSC_copystr(
-		HttpRequest_path(HttpContext_request(context))), free);
-
-    const HeaderSet *hdr = HttpRequest_headers(HttpContext_request(context));
-    const char *realm = Session_getProp(session, SK_AREALM);
-    if (!realm) realm = loginHandler_realm(hdr, pathParser);
-
-    const char *lr = Session_getProp(session, SK_REALM);
-    if (lr && strcmp(lr, realm))
-    {
-	Session_setProp(session, SK_USER, 0, 0);
-	Session_setProp(session, SK_ERROR, 0, 0);
-    }
-    char *loginrealm = PSC_copystr(realm);
-    Session_setProp(session, SK_REALM, loginrealm, free);
-    const char *rdr = Session_getProp(session, SK_ARDR);
-    if (!rdr) rdr = loginHandler_rdr(hdr, pathParser);
-    Session_setProp(session, SK_RDR, PSC_copystr(rdr), free);
-
-    return loginrealm;
-}
-
 void loginHandler(HttpContext *context)
 {
     const PathParser *pathParser = PathParser_get(context);
-    Session *session = Session_get(context);
-    if (!pathParser || !session) return;
+    if (!pathParser) return;
 
     const char *path = PathParser_path(pathParser);
     if (!strcmp(route, path))
     {
 	HttpMethod method = HttpRequest_method(HttpContext_request(context));
-	if (method == HTTP_POST) doLogin(context, session);
-	else
-	{
-	    const char *realm = updateSession(context, pathParser, session);
-	    showForm(context, session, realm, path);
-	}
+	if (method == HTTP_POST) doLogin(context);
+	else showForm(context, pathParser);
     }
     else HttpContext_setResponse(context,
 	    HttpResponse_createError(HTTP_NOTFOUND, 0));
