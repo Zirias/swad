@@ -137,7 +137,7 @@ static void showForm(HttpContext *context, Session *session,
     else tdata = Authenticator_loginTmpl(auth, &tsz);
     Authenticator_destroy(auth);
 
-    const char *csrfToken = CSRFProtect_token(context);
+    const char *csrfToken = CSRFProtect_token(context, route);
     if (!csrfToken)
     {
 	PSC_Log_msg(PSC_L_ERROR, "Cannot obtain random data for CSRF "

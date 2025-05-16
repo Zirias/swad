@@ -6,8 +6,8 @@
 C_CLASS_DECL(HttpContext);
 
 const char *CSRFProtect_name(void) ATTR_RETNONNULL ATTR_CONST;
-const char *CSRFProtect_token(HttpContext *context)
-    ATTR_NONNULL((1)) ATTR_PURE;
+const char *CSRFProtect_token(HttpContext *context, const char *path)
+    ATTR_NONNULL((1)) ATTR_NONNULL((2)) ATTR_PURE;
 
 void MW_CSRFProtect(HttpContext *context) ATTR_NONNULL((1));
 

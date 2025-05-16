@@ -32,14 +32,14 @@ static void deviate(void *obj, const Authenticator *auth, HttpContext *context)
 
     const PathParser *pathParser = PathParser_get(context);
     if (!pathParser) return;
-    const char *csrfToken = CSRFProtect_token(context);
+    const char *path = PathParser_path(pathParser);
+    const char *csrfToken = CSRFProtect_token(context, path);
     if (!csrfToken) return;
 
     char *challenge = PSC_Random_createStr(32, PSC_RF_NONBLOCK);
     Session_setProp(Authenticator_session(auth), "_POW_CHALLENGE",
 	    challenge, free);
 
-    const char *path = PathParser_path(pathParser);
     char difficulty[8];
     char stylelink[256];
     char scriptlink[256];
