@@ -233,6 +233,27 @@ pam_swad = pam:swad
 Secret = pam_swad
 ```
 
+## Configuration for heavy load
+
+Here are some tips how to configure swad for operation under heavy load:
+
+* **Don't** enable the `resolve_hosts` option. Resolving won't directly stall
+  the service because it is done on thread jobs, but if you have a very high
+  rate of incoming requests, these thread jobs could still completely saturate
+  the thread pool and therefore interfere with normal request processing.
+
+* Bump up `threads_per_cpu` for more worker threads, to allow processing more
+  requests in parallel.
+  Default is `4`.
+
+* Bump up `job_queue_per_thread` to allow more thread jobs to wait for an
+  available worker thread (helping with sudden request bursts).
+  Default is `16`.
+
+* You might also consider setting `log_level` to `error` to further decrease
+  usage of the thread pool, but then you won't get any request logging any
+  more.
+
 ## Building
 
 To obtain the source from git, make sure to include submodules, e.g. with the
