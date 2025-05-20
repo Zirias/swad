@@ -149,10 +149,10 @@
 #
 # This could be increased for heavy loads or for machines with few cores.
 # When built for a system without POSIX user context switching, so a worker
-# awaiting some "async task" blocks a worker thread, this defaults to two
+# awaiting some "async task" blocks a worker thread, this defaults to 6
 # threads per CPU/core.
 #
-# Min: 1, Max: 256, Default: 1
+# Min: 1, Max: 256, Default: 4
 #
 ; threads_per_cpu = 1
 
@@ -160,9 +160,9 @@
 #
 # If for some reason, the number of CPUs/cores of the system can't be
 # determined, use this many worker threads.
-# Min: 1, Max: 4096, Default: 8
+# Min: 1, Max: 4096, Default: 16
 #
-; default_threads = 8
+; default_threads = 16
 
 # Total maximum number of worker threads
 #
@@ -177,7 +177,7 @@
 # available worker threads.
 # Min: 1, Max: 64, Default: 2
 #
-; job_queue_per_thread = 4
+; job_queue_per_thread = 16
 
 # Total maximum size of the job queue
 #
