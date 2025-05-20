@@ -55,6 +55,11 @@
 # Determines whether an attempt is made to resolve the hostname of a remote
 # host.
 #
+# For good performance under heavy load, keep this disabled. Resolving
+# hostnames will be done on thread jobs to avoid stalling the main loop, but
+# when lots of these jobs run at the same time, it could still block the entire
+# thread pool.
+#
 ; resolve_hosts = off
 
 # Rate limit creation of new sessions
