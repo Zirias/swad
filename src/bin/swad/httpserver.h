@@ -44,7 +44,7 @@ int HttpServer_configure(HttpServer *self, const HttpServerOpts *opts)
     CMETHOD ATTR_NONNULL((1));
 void HttpServer_addRoute(HttpServer *self, const char *prefix,
 	HttpHandler handler, HttpMethod methodMask,
-	HttpMethodCheck methodCheck)
+	HttpMethodCheck methodCheck, int setAsync)
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
 void HttpServer_updateRoute(HttpServer *self, const char *prefix,
 	HttpHandler handler, const char *newPrefix)

@@ -64,11 +64,13 @@ static void setupPipeline(HttpServer *server)
     HttpServer_addMiddleware(server, MW_FormData);
 
     HttpServer_addRoute(server, Config_staticRoute(cfg),
-	    staticHandler, HTTP_GET, 0);
+	    staticHandler, HTTP_GET, 0, 0);
     HttpServer_addRoute(server, Config_loginRoute(cfg),
-	    loginHandler, HTTP_GET|HTTP_POST, 0);
+	    loginHandler, HTTP_GET, 0, 0);
+    HttpServer_addRoute(server, Config_loginRoute(cfg),
+	    loginHandler, HTTP_POST, 0, 1);
     HttpServer_addRoute(server, "/",
-	    rootHandler, HTTP_GET, 0);
+	    rootHandler, HTTP_GET, 0, 0);
 
     HttpServer_setLogLevelCallback(server, logLevelFor);
 }

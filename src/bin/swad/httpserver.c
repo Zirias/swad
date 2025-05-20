@@ -27,6 +27,7 @@ typedef struct HttpRoute
     HttpHandler handler;
     HttpMethod mask;
     HttpMethodCheck check;
+    int setAsync;
 } HttpRoute;
 
 struct HttpServer
@@ -452,6 +453,7 @@ static void requestReceived(void *receiver, void *sender, void *args)
     HttpContext *context = 0;
     HttpResponse *response = 0;
     HttpHandler hdl = 0;
+    int setAsync = 0;
 
     HttpStatus reqStatus = HttpRequest_status(req);
     if (reqStatus != HTTP_OK)
@@ -461,24 +463,30 @@ static void requestReceived(void *receiver, void *sender, void *args)
     }
 
     const char *reqPath = HttpRequest_path(req);
-    HttpMethod mask;
+    HttpHandler hdlcand = 0;
+    HttpMethod mask = 0;
     for (size_t i = 0; i < self->routescount; ++i)
     {
 	if (!strncmp(reqPath, self->routes[i].prefix,
 		    strlen(self->routes[i].prefix)))
 	{
-	    hdl = self->routes[i].handler;
-	    mask = self->routes[i].check
+	    hdlcand = self->routes[i].handler;
+	    mask |= self->routes[i].check
 		? self->routes[i].check(reqPath)
 		: self->routes[i].mask;
-	    break;
+	    if (HttpRequest_method(req) & mask)
+	    {
+		hdl = hdlcand;
+		setAsync = self->routes[i].setAsync;
+		break;
+	    }
 	}
     }
-    if (!hdl)
+    if (!hdlcand)
     {
 	response = HttpResponse_createError(HTTP_NOTFOUND, 0);
     }
-    else if (!(HttpRequest_method(req) & mask))
+    else if (!hdl)
     {
 	response = HttpResponse_createError(HTTP_METHODNOTALLOWED, 0);
 	HttpResponse_setAllowHeader(response, mask);
@@ -497,6 +505,7 @@ done:
 		pipelineJobDone, 0);
 	PSC_Event_register(PSC_Connection_closed(conn), self,
 		pipelineJobCanceled, 0);
+	if (setAsync) PSC_ThreadJob_setAsync(ctx->job);
 	if (PSC_ThreadPool_enqueue(ctx->job) < 0)
 	{
 	    PSC_Event_unregister(PSC_Connection_closed(conn), self,
@@ -647,7 +656,7 @@ int HttpServer_configure(HttpServer *self, const HttpServerOpts *opts)
 
 void HttpServer_addRoute(HttpServer *self, const char *prefix,
 	HttpHandler handler, HttpMethod methodMask,
-	HttpMethodCheck methodCheck)
+	HttpMethodCheck methodCheck, int setAsync)
 {
     if (self->routescount == self->routescapa)
     {
@@ -659,6 +668,7 @@ void HttpServer_addRoute(HttpServer *self, const char *prefix,
     self->routes[self->routescount].handler = handler;
     self->routes[self->routescount].mask = methodMask;
     self->routes[self->routescount].check = methodCheck;
+    self->routes[self->routescount].setAsync = setAsync;
     ++self->routescount;
 }
 
