@@ -95,7 +95,7 @@ static void deviate(void *obj, const Authenticator *auth)
     if (!pathParser) return;
     time_t now = time(0);
     if (now <= 0) return;
-    time_t exp = now + 5U * 50U;
+    time_t exp = now + 120U;
     char expstr[17];
     snprintf(expstr, 17, "%" PRIx64, (uint64_t)exp);
     char *challenge = createChallenge(context, expstr);
