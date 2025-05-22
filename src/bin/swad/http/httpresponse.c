@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L
+
 #include "httpresponse.h"
 
 #include "../htmlescape.h"
@@ -12,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define ERROR_FORMAT "<!DOCTYPE html><html><head><title>%s</title></head>" \
     "<body><h1>%s</h1><p>%s</p></body></html>"
@@ -317,6 +320,20 @@ int HttpResponse_send(HttpResponse *self, PSC_Connection *conn)
     {
 	HeaderSet_add(self->headers, Header_create("Cache-Control",
 		    "no-cache, no-store, must-revalidate"));
+    }
+    if (!HeaderSet_first(self->headers, "Date"))
+    {
+	struct tm now;
+	char nowstr[32];
+	time_t t = time(0);
+	if (t > 0 && gmtime_r(&t, &now) &&
+		strftime(nowstr, sizeof nowstr,
+		    "%a, %d %b %Y %T GMT", &now) > 0)
+	{
+	    HeaderSet_add(self->headers, Header_create("Date", nowstr));
+	}
+	else PSC_Log_msg(PSC_L_WARNING,
+		"httpresponse: Cannot format Date header");
     }
     size_t statuslen = strlen(statusStr(self->status));
     size_t headersize = HeaderSet_size(self->headers);
