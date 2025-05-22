@@ -74,7 +74,8 @@ static Session *createSession(time_t now, char *id)
 {
     do
     {
-	size_t sz = PSC_Random_string(id, SID_LEN+1, PSC_RF_SECURE);
+	size_t sz = PSC_Random_string(id, SID_LEN+1,
+		PSC_RF_SECURE, PSC_B64_URLSAFE);
 	if (sz < SID_LEN+1) return 0;
     } while (findSession(id, now));
     Session *self = PSC_malloc(sizeof *self);

@@ -38,7 +38,8 @@ static void deviate(void *obj, const Authenticator *auth)
     if (!pathParser) return;
     Session *session = Session_start(context);
     if (!session) return;
-    char *challenge = PSC_Random_createStr(32, PSC_RF_NONBLOCK);
+    char *challenge = PSC_Random_createStr(32,
+	    PSC_RF_NONBLOCK, PSC_B64_URLSAFE);
     Session_setProp(session, "_POW_CHALLENGE", challenge, free);
 
     char difficulty[8];

@@ -77,8 +77,8 @@ skip:
 	PSC_Hash *hasher = PSC_Hash_create(0, 0);
 	uint64_t hash = PSC_Hash_bytes(hasher, style_css, style_css_sz);
 	PSC_Hash_destroy(hasher);
-	style_css_filevers = PSC_Base64_encode(&hash, sizeof hash);
-	for (char *c = style_css_filevers; *c; ++c) if (*c == '/') *c = '_';
+	style_css_filevers = PSC_Base64_encode(&hash,
+		sizeof hash, PSC_B64_URLSAFE);
     }
     else
     {

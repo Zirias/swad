@@ -56,7 +56,7 @@ const char *CSRFProtect_token(HttpContext *context, const char *path)
     char *token = PSC_HashTable_get(tokens->tokens, path);
     if (!token)
     {
-	token = PSC_Random_createStr(32, PSC_RF_SECURE);
+	token = PSC_Random_createStr(32, PSC_RF_SECURE, PSC_B64_URLSAFE);
 	if (token) PSC_HashTable_set(tokens->tokens, path, token, free);
     }
     pthread_mutex_unlock(&tokens->lock);
