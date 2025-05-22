@@ -146,8 +146,9 @@ static AuthInfo *getAuthInfo(Authenticator *self, int create)
 	{
 	    if (!Session_start(self->context)) return 0;
 	    self->authInfos = getAuthInfos(self->context);
+	    if (!self->authInfos) return 0;
 	}
-	return 0;
+	else return 0;
     }
     AuthInfo *authInfo = PSC_HashTable_get(self->authInfos, self->realmnm);
     if (self->realm && authInfo && authInfo->version != self->realm->version)
