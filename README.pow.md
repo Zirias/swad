@@ -11,8 +11,8 @@ The username and password it accepts can be configured, both default to
 ## How it works ...
 
 The idea for the cryptographic puzzle is taken from the
-[Anubis](https://github.com/TecharoHQ/anubis) project. It works by giving
-the client browser some random challenge string and requiring it to find a
+[Anubis](https://github.com/TecharoHQ/anubis) project. It works by giving the
+client browser some pseudo-random challenge string and requiring it to find a
 nonce so that the concatenation of the challenge and the nonce produces an
 sha256 hash with a certain number of leading zeros. The difficulty configures
 how many leading zeros this hash must have.
@@ -38,9 +38,14 @@ with just an instant of waiting.
   pictures, explanations, even a progress bar, while swad's `pow` checker does
   it pretty much "bare bones", just showing a simple spinner while the client
   solves the puzzle.
-* Anubis creates challenges using some deterministic algorithm, the challenges
-  created by swad's `pow` checker are completely random. This is most likely
-  irrelevant in practice.
+* The challenge is constructed in a slightly different way. Swad calculates an
+  expiration timestamp for the challenge 5 minutes in the future, solutions
+  POSTed later are not accepted any more. It adds this timestamp, the real
+  remote address (as obtained from proxy headers), the user agent string and
+  all "Accept" headers to a buffer that's then hashed and base64 encoded to
+  create the challenge. The expiration timestamp is sent back from the client
+  together with the solving nonce, so the exact same challenge can be
+  constructed again for verification.
 * Anubis issues a signed JWT on success, swad works with a server-side session
   identified by a random session ID. The advantage of the JWT is not requiring
   any server-side state and therefore saving server RAM, the advantage of the
