@@ -17,8 +17,8 @@
 #include "../template.h"
 #include "../tmpl.h"
 
+#include <inttypes.h>
 #include <openssl/sha.h>
-#include <poser/core/base64.h>
 #include <poser/core/hash.h>
 #include <poser/core/ipaddr.h>
 #include <poser/core/list.h>
@@ -50,7 +50,7 @@ static void addHeader(char *buf, unsigned sz, unsigned *pos,
     }
 }
 
-static char *createChallenge(HttpContext *context, time_t exp)
+static char *createChallenge(HttpContext *context, const char *exp)
 {
     char buf[4096];
     unsigned bufpos = 0;
@@ -65,8 +65,9 @@ static char *createChallenge(HttpContext *context, time_t exp)
     if (!entry) return 0;
     const char *remoteHost = PSC_IpAddr_string(RemoteEntry_addr(entry));
 
-    memcpy(buf, &exp, sizeof exp);
-    bufpos = sizeof exp;
+    size_t explen = strlen(exp);
+    memcpy(buf, exp, explen);
+    bufpos = explen;
     size_t rhlen = strlen(remoteHost);
     memcpy(buf+bufpos, remoteHost, rhlen);
     bufpos += rhlen;
@@ -75,10 +76,12 @@ static char *createChallenge(HttpContext *context, time_t exp)
     addHeader(buf, sizeof buf, &bufpos, headers, "Accept-Language");
     addHeader(buf, sizeof buf, &bufpos, headers, "Accept-Encoding");
 
-    PSC_Hash *hasher = PSC_Hash_create(0, 1);
+    PSC_Hash *hasher = PSC_Hash_create(0, 0);
     uint64_t hash = PSC_Hash_bytes(hasher, buf, bufpos);
     PSC_Hash_destroy(hasher);
-    return PSC_Base64_encode(&hash, sizeof hash, PSC_B64_URLSAFE);
+    char *challenge = PSC_malloc(17);
+    snprintf(challenge, 17, "%" PRIx64, hash);
+    return challenge;
 }
 
 static void deviate(void *obj, const Authenticator *auth)
@@ -90,8 +93,12 @@ static void deviate(void *obj, const Authenticator *auth)
     if (!form) return;
     const PathParser *pathParser = PathParser_get(context);
     if (!pathParser) return;
-    time_t exp = time(0) + 5U * 50U;
-    char *challenge = createChallenge(context, exp);
+    time_t now = time(0);
+    if (now <= 0) return;
+    time_t exp = now + 5U * 50U;
+    char expstr[17];
+    snprintf(expstr, 17, "%" PRIx64, (uint64_t)exp);
+    char *challenge = createChallenge(context, expstr);
     if (!challenge) return;
 
     char difficulty[8];
@@ -107,8 +114,7 @@ static void deviate(void *obj, const Authenticator *auth)
     Template *tmpl = Template_createStatic(tmpl_pow_html, tmpl_pow_html_sz);
     Template_setStaticVar(tmpl, "REALM", Authenticator_realm(auth), TF_HTML);
     Template_setStaticVar(tmpl, "RDR", rdr, TF_HTML);
-    Template_passVar(tmpl, "EXP",
-	    PSC_Base64_encode(&exp, sizeof exp, PSC_B64_URLSAFE), TF_NONE);
+    Template_setStaticVar(tmpl, "EXP", expstr, TF_NONE);
     Template_setStaticVar(tmpl, "SELF", path, TF_NONE);
     Template_setStaticVar(tmpl, "USER", self->user, TF_HTML);
     Template_setStaticVar(tmpl, "CHALLENGE", challenge, TF_NONE);
@@ -134,10 +140,9 @@ static AuthResult check(void *obj, const char *user, const char *pw,
 	if (!form) return AR_FAILED;
 	const char *expstr = FormData_single(form, "exp", 0);
 	if (!expstr) goto checkdeviate;
-	time_t exp;
-	PSC_Base64_decodeTo(&exp, expstr, PSC_Base64_encodedLen(sizeof exp));
+	long long exp = strtoll(expstr, 0, 16);
 	if (time(0) >= exp) goto checkdeviate;
-	const char *challenge = createChallenge(context, exp);
+	const char *challenge = createChallenge(context, expstr);
 	if (!challenge) goto checkdeviate;
 	char tohash[128];
 	int tohashlen = snprintf(tohash, sizeof tohash, "%s%s", challenge, pw);

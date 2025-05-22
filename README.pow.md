@@ -42,9 +42,9 @@ with just an instant of waiting.
   expiration timestamp for the challenge 5 minutes in the future, solutions
   POSTed later are not accepted any more. It adds this timestamp, the real
   remote address (as obtained from proxy headers), the user agent string and
-  all "Accept" headers to a buffer that's then hashed and base64 encoded to
-  create the challenge. The expiration timestamp is sent back from the client
-  together with the solving nonce, so the exact same challenge can be
+  all "Accept" headers to a buffer that's then hashed to a hex string for
+  creating the challenge. The expiration timestamp is sent back from the
+  client together with the solving nonce, so the exact same challenge can be
   constructed again for verification.
 * Anubis issues a signed JWT on success, swad works with a server-side session
   identified by a random session ID. The advantage of the JWT is not requiring
