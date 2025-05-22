@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L
+
 #include "cookies.h"
 
 #include "../http/header.h"
@@ -10,8 +12,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
-#define MAXCOOKIES 8
 #define PROPNAME "_COOKIES"
 
 struct Cookies
@@ -20,7 +22,11 @@ struct Cookies
     PSC_HashTable *out;
 };
 
-static void cookiesDeleter(void *obj);
+typedef struct SetCookie
+{
+    char *value;
+    int64_t expires;
+} SetCookie;
 
 static void cookiesDeleter(void *obj)
 {
@@ -29,6 +35,14 @@ static void cookiesDeleter(void *obj)
     PSC_HashTable_destroy(self->out);
     PSC_HashTable_destroy(self->in);
     free(self);
+}
+
+static void deleteSetCookie(void *obj)
+{
+    if (!obj) return;
+    SetCookie *cookie = obj;
+    free(cookie->value);
+    free(cookie);
 }
 
 Cookies *Cookies_get(const HttpContext *context)
@@ -42,10 +56,22 @@ const char *Cookies_getCookie(const Cookies *self, const char *name)
     return PSC_HashTable_get(self->in, name);
 }
 
-void Cookies_setCookie(Cookies *self, const char *name, const char *value)
+void Cookies_setCookie(Cookies *self, const char *name, const char *value,
+	int64_t expires)
 {
     if (!self->out) self->out = PSC_HashTable_create(5);
-    PSC_HashTable_set(self->out, name, PSC_copystr(value), free);
+    SetCookie *cookie = PSC_malloc(sizeof *cookie);
+    cookie->value = PSC_copystr(value);
+    cookie->expires = expires;
+    PSC_HashTable_set(self->out, name, cookie, deleteSetCookie);
+}
+
+void Cookie_deleteCookie(Cookies *self, const char *name)
+{
+    if (!self->out) self->out = PSC_HashTable_create(5);
+    SetCookie *cookie = PSC_malloc(sizeof *cookie);
+    memset(cookie, 0, sizeof *cookie);
+    PSC_HashTable_set(self->out, name, cookie, deleteSetCookie);
 }
 
 void MW_Cookies(HttpContext *context)
@@ -87,12 +113,48 @@ void MW_Cookies(HttpContext *context)
     while (PSC_HashTableIterator_moveNext(i))
     {
 	char hdrval[4096];
-	if ((size_t)snprintf(hdrval, 1024, "%s=%s; Path=/; HttpOnly",
-		    PSC_HashTableIterator_key(i),
-		    (const char *)PSC_HashTableIterator_current(i))
-		< sizeof hdrval)
+	char expstr[32] = {0};
+	SetCookie *scookie = PSC_HashTableIterator_current(i);
+	size_t cookielen;
+	if (scookie->value && scookie->expires)
+	{
+	    time_t expires = scookie->expires;
+	    struct tm exp;
+	    if (gmtime_r(&expires, &exp))
+	    {
+		if (!strftime(expstr, sizeof expstr,
+			    "%a, %d %b %Y %T GMT", &exp))
+		{
+		    PSC_Log_msg(PSC_L_WARNING, "cookies: Cannot set expiry");
+		    expstr[0] = 0;
+		}
+	    }
+	}
+	if (!scookie->value)
+	{
+	    cookielen = snprintf(hdrval, sizeof hdrval, "%s=; Path=/; "
+		    "Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly",
+		    PSC_HashTableIterator_key(i));
+	}
+	else if (!*expstr)
+	{
+	    cookielen = snprintf(hdrval, sizeof hdrval,
+		    "%s=%s; Path=/; HttpOnly",
+		    PSC_HashTableIterator_key(i), scookie->value);
+	}
+	else
+	{
+	    cookielen = snprintf(hdrval, sizeof hdrval,
+		    "%s=%s; Path=/; Expires=%s; HttpOnly",
+		    PSC_HashTableIterator_key(i), scookie->value, expstr);
+	}
+	if (cookielen < sizeof hdrval)
 	{
 	    HeaderSet_add(respHdr, Header_create("Set-Cookie", hdrval));
+	}
+	else
+	{
+	    PSC_Log_msg(PSC_L_WARNING, "cookies: Ignoring overlength cookie");
 	}
     }
     PSC_HashTableIterator_destroy(i);

@@ -153,7 +153,7 @@ Session *Session_start(HttpContext *context)
 		"Cannot obtain random data for new session id!");
 	return 0;
     }
-    Cookies_setCookie(cookies, COOKIENAME, newsid);
+    Cookies_setCookie(cookies, COOKIENAME, newsid, 0);
     HttpContext_set(context, PROPNAME, session, 0);
     return session;
 }
