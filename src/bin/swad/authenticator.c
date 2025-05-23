@@ -420,6 +420,7 @@ void Authenticator_init(void)
     checkers = PSC_HashTable_create(4);
     realms = PSC_HashTable_create(4);
     pthread_mutex_init(&authlock, 0);
+    Jwt_createHmacKey();
 }
 
 void Authenticator_setDefaultLimit(PSC_RateLimitOpts *limitOpts)

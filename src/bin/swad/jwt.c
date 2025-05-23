@@ -4,6 +4,7 @@
 #include <openssl/hmac.h>
 #include <poser/core/base64.h>
 #include <poser/core/json.h>
+#include <poser/core/random.h>
 #include <poser/core/util.h>
 #include <string.h>
 
@@ -19,6 +20,11 @@ struct Jwt
 };
 
 static char key[64];
+
+void Jwt_createHmacKey(void)
+{
+    PSC_Random_bytes(key, sizeof key, PSC_RF_ANY);
+}
 
 Jwt *Jwt_create(const char *iss, const char *sub, uint32_t seconds)
 {
