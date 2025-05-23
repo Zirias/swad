@@ -51,17 +51,19 @@ Jwt *Jwt_parse(const char *str)
     if (!dot2) return 0;
 
     PSC_JsonSerializer *ser = PSC_JsonSerializer_create(0);
-    *dot1 = 0;
-    char *josestr = PSC_Base64_decode(str, 0);
-    *dot1 = '.';
+    size_t joselen = PSC_Base64_decodedSize(dot1-str);
+    char *josestr = PSC_malloc(joselen + 1);
+    PSC_Base64_decodeTo(josestr, str, dot1-str);
+    josestr[joselen] = 0;
     PSC_Json *jose = PSC_JsonSerializer_deserialize(ser, josestr);
     free(josestr);
     if (!jose) goto error;
     const PSC_Json *typ = PSC_Json_property(jose, "typ", 3);
     if (!typ || strcmp(PSC_Json_string(typ), "JWT")) goto error;
-    *dot2 = 0;
-    char *jsonstr = PSC_Base64_decode(dot1+1, 0);
-    *dot2 = '.';
+    size_t jsonlen = PSC_Base64_decodedSize(dot2-dot1-1);
+    char *jsonstr = PSC_malloc(jsonlen + 1);
+    PSC_Base64_decodeTo(jsonstr, dot1+1, dot2-dot1-1);
+    jsonstr[jsonlen] = 0;
     PSC_Json *json = PSC_JsonSerializer_deserialize(ser, jsonstr);
     free(jsonstr);
     if (!json) goto error;
