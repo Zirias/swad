@@ -10,8 +10,8 @@
 #include "../mediatype.h"
 #include "../middleware/formdata.h"
 #include "../middleware/pathparser.h"
-#include "../middleware/session.h"
 #include "../template.h"
+#include "../urlencode.h"
 #include "static.h"
 
 #include <poser/core.h>
@@ -20,11 +20,14 @@
 
 #define QP_RDR	    "rdr"
 #define QP_REALM    "realm"
+#define QP_ERRNO    "err"
+#define QP_USER	    "user"
 #define HDR_RDR	    "X-SWAD-Rdr"
 #define HDR_REALM   "X-SWAD-Realm"
 
-#define SK_ERROR    "login_error"
-#define SK_USER	    "login_user"
+#define ERR_OK	    0
+#define ERR_FAILED  1
+#define ERR_BLOCKED 2
 
 static const char defroute[] = "/login";
 static const char *route = defroute;
@@ -33,6 +36,8 @@ static void doLogin(HttpContext *context)
 {
     HttpStatus status = HTTP_SEEOTHER;
     const char *rdr = loginHandler_route();
+    const char *rdrUser = 0;
+    int rdrErr = ERR_OK;
     FormData *form = FormData_get(context);
     if (!form) goto done;
 
@@ -58,9 +63,6 @@ static void doLogin(HttpContext *context)
 	{
 	    status = HTTP_OK;
 	    rdr = authrdr;
-	    Session *session = Session_start(context);
-	    if (!session) return;
-	    Session_setProp(session, SK_ERROR, 0, 0);
 	    PSC_Log_fmt(PSC_L_INFO, "login: %s logged in for %s",
 		    user, realm);
 	}
@@ -72,28 +74,24 @@ static void doLogin(HttpContext *context)
 	}
 	else
 	{
-	    Session *session = Session_start(context);
-	    if (!session) return;
 	    if (result == AR_BLOCKED)
 	    {
-		Session_setProp(session, SK_ERROR,
-			"Too many failed attempts, try again later", 0);
+		rdrErr = ERR_BLOCKED;
 		PSC_Log_fmt(PSC_L_WARNING, "login: Blocked login as %s for %s",
 			user, realm);
 	    }
 	    else
 	    {
-		Session_setProp(session, SK_ERROR, "Invalid credentials", 0);
+		rdrErr = ERR_FAILED;
 		PSC_Log_fmt(PSC_L_WARNING, "login: Failed login as %s for %s",
 			user, realm);
 	    }
-	    Session_setProp(session, SK_USER, PSC_copystr(user), free);
+	    rdrUser = user;
 	}
 	Authenticator_destroy(auth);
     }
     else if (FormData_single(form, "logout", 0))
     {
-	if (!CSRFProtect_verify(context)) return;
 	Authenticator *auth = Authenticator_create(context, realm);
 	if (Authenticator_user(auth))
 	{
@@ -106,7 +104,34 @@ static void doLogin(HttpContext *context)
 
 done:
     if (!rdr) rdr = "/";
-    HttpContext_setResponse(context, HttpResponse_createRedirect(status, rdr));
+    if (rdrErr || rdrUser)
+    {
+	char *encUser = 0;
+	size_t qslen = strlen(rdr);
+	if (rdrErr)
+	{
+	    qslen += sizeof "?" QP_ERRNO "=";
+	}
+	if (rdrUser)
+	{
+	    encUser = urlencode(rdrUser);
+	    qslen += strlen(encUser) + sizeof "?" QP_USER;
+	}
+	char *rdrqs = PSC_malloc(qslen + 1);
+	if (rdrErr)
+	{
+	    if (encUser) sprintf(rdrqs, "%s?" QP_ERRNO "=%d&" QP_USER "=%s",
+		    rdr, rdrErr, encUser);
+	    else sprintf(rdrqs, "%s?" QP_ERRNO "=%d", rdr, rdrErr);
+	}
+	else sprintf(rdrqs, "%s?" QP_USER "=%s", rdr, encUser);
+	free(encUser);
+	HttpContext_setResponse(context,
+		HttpResponse_createRedirect(status, rdrqs));
+	free(rdrqs);
+    }
+    else HttpContext_setResponse(context,
+	    HttpResponse_createRedirect(status, rdr));
 }
 
 static void showForm(HttpContext *context, const PathParser *pathParser)
@@ -119,8 +144,6 @@ static void showForm(HttpContext *context, const PathParser *pathParser)
     {
 	user = Authenticator_user(auth);
 	Authenticator_destroy(auth);
-	Session *session = Session_get(context);
-	if (session) Session_setProp(session, SK_ERROR, 0, 0);
 	PSC_Log_fmt(PSC_L_INFO, "login: %s silently logged in for %s",
 		User_username(user), realm);
 	HttpContext_setResponse(context,
@@ -130,17 +153,7 @@ static void showForm(HttpContext *context, const PathParser *pathParser)
     }
     const uint8_t *tdata;
     size_t tsz;
-    if (user)
-    {
-	const char *csrfToken = CSRFProtect_token(context, route);
-	if (!csrfToken)
-	{
-	    PSC_Log_msg(PSC_L_ERROR, "Cannot obtain CSRF protection token!");
-	    return;
-	}
-
-	tdata = Authenticator_logoutTmpl(auth, &tsz);
-    }
+    if (user) tdata = Authenticator_logoutTmpl(auth, &tsz);
     else tdata = Authenticator_loginTmpl(auth, &tsz);
     Authenticator_destroy(auth);
 
@@ -155,13 +168,34 @@ static void showForm(HttpContext *context, const PathParser *pathParser)
     }
     else
     {
-	Session *session = Session_get(context);
-	if (session)
+	const QueryParam *errnoParam = PathParser_param(
+		pathParser, QP_ERRNO, 0);
+	if (errnoParam)
 	{
-	    const char *le = Session_getProp(session, SK_ERROR);
-	    if (le) Template_setStaticVar(tmpl, "ERRMSG", le, TF_HTML);
-	    const char *lu = Session_getProp(session, SK_USER);
-	    if (lu) Template_setStaticVar(tmpl, "USER", lu, TF_HTML);
+	    int err = atoi(QueryParam_value(errnoParam));
+	    const char *errstr = 0;
+	    switch (err)
+	    {
+		case ERR_FAILED:
+		    errstr = "Invalid credentials";
+		    break;
+
+		case ERR_BLOCKED:
+		    errstr = "Too many failed attempts, try again later";
+		    break;
+	    }
+	    if (errstr) Template_setStaticVar(tmpl, "ERRMSG", errstr, TF_NONE);
+	}
+	const QueryParam *userParam = PathParser_param(
+		pathParser, QP_USER, 0);
+	if (userParam)
+	{
+	    const char *userstr = QueryParam_value(userParam);
+	    size_t userlen = strlen(userstr);
+	    if (userlen > 0 && userlen <= 32)
+	    {
+		Template_setStaticVar(tmpl, "USER", userstr, TF_HTML);
+	    }
 	}
     }
     Template_setStaticVar(tmpl, "REALM", realm, TF_HTML);
