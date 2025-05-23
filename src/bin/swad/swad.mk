@@ -38,6 +38,7 @@ swad_MODULES=		authenticator \
 			http/httpresponse \
 			http/httpstatus \
 			httpserver \
+			jwt \
 			main \
 			mediatype \
 			middleware/compress \
