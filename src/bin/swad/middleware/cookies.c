@@ -7,12 +7,16 @@
 #include "../http/httpcontext.h"
 #include "../http/httprequest.h"
 #include "../http/httpresponse.h"
+#include "../urlencode.h"
 
 #include <poser/core.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#define MAXNAMELEN 128
+#define MAXENCNAMELEN (3 * MAXNAMELEN)
 
 #define PROPNAME "_COOKIES"
 
@@ -59,11 +63,23 @@ const char *Cookies_getCookie(const Cookies *self, const char *name)
 void Cookies_setCookie(Cookies *self, const char *name, const char *value,
 	int64_t expires)
 {
+    char encnm[MAXENCNAMELEN + 1];
+    if (strlen(value) > MAXNAMELEN)
+    {
+	PSC_Log_msg(PSC_L_WARNING, "cookie: Name too long, ignoring");
+	return;
+    }
+    size_t encsz = sizeof encnm;
+    size_t encpos = 0;
+    char *encbuf = encnm;
+    urlencodeto(&encbuf, &encsz, &encpos, name);
+    encnm[encpos] = 0;
+
     if (!self->out) self->out = PSC_HashTable_create(5);
     SetCookie *cookie = PSC_malloc(sizeof *cookie);
     cookie->value = PSC_copystr(value);
     cookie->expires = expires;
-    PSC_HashTable_set(self->out, name, cookie, deleteSetCookie);
+    PSC_HashTable_set(self->out, encnm, cookie, deleteSetCookie);
 }
 
 void Cookie_deleteCookie(Cookies *self, const char *name)
@@ -82,7 +98,6 @@ void MW_Cookies(HttpContext *context)
     const Header *cookie = HeaderSet_first(HttpRequest_headers(req), "Cookie");
     if (cookie)
     {
-	char name[2048];
 	const char *cl = Header_value(cookie);
 	while (*cl == ' ') ++cl;
 	while (*cl)
@@ -90,15 +105,15 @@ void MW_Cookies(HttpContext *context)
 	    size_t dpos = strcspn(cl, ";");
 	    if (!dpos) break;
 	    size_t eqpos = strcspn(cl, "=");
-	    if (eqpos && eqpos < sizeof name && eqpos < dpos)
+	    if (eqpos && eqpos < dpos)
 	    {
-		memcpy(name, cl, eqpos);
-		name[eqpos] = 0;
+		char *name = urldecode(cl, eqpos);
 		char *value = PSC_malloc(dpos-eqpos);
 		memcpy(value, cl+eqpos+1, dpos-eqpos-1);
 		value[dpos-eqpos-1] = 0;
 		if (!self->in) self->in = PSC_HashTable_create(5);
 		PSC_HashTable_set(self->in, name, value, free);
+		free(name);
 	    }
 	    cl += dpos;
 	    if (*cl == ';') do ++cl; while (*cl == ' ');
