@@ -62,53 +62,23 @@
 #
 ; resolve_hosts = off
 
-# Rate limit creation of new sessions
+# Rate limit login failures
 #
-# Determines the maximum rates for creating new sessions allowed per remote
-# host, can be given up to 8 times. Each value is of the form
-# `<seconds>:<limit>`, meaning to allow at most <limit> new sessions to be
-# created within <seconds> seconds. <seconds> must be in the range [1-86400],
+# This is the default rate limit for failed logins. Each value is of the form
+# `<seconds>:<limit>`, meaning to allow at most <limit> failed attempts
+# within <seconds> seconds. <seconds> must be in the range [1-86400],
 # <limit> in the range [1-1024].
 #
 # The remote host for these limits is determined based on the
 # `trusted_proxies` setting of the server.
 #
-# If not given, a default of 3 in 5 seconds, 5 per minute and 25 per hour is
-# used.
-#
-; session_limit = 5:3
-; session_limit = 60:5
-; session_limit = 3600:25
-
-# Rate limit login failures
-#
-# This is the default rate limit for failed logins. It follows the same syntax
-# like the `session_limit` above and can be overridden per realm, see below.
-#
-# The limit is set per session and username, and when it is reached, no more
-# logins are performed and an appropriate error message is displayed.
-# It doesn't matter whether the username actually exists.
+# When the limit is reached, no more logins are performed and an appropriate
+# error message is displayed. It doesn't matter whether the username
+# actually exists.
 #
 # If not given, a default of at most 5 failed logins in 15 minutes is used.
 #
 ; login_fail_limit = 900:5
-
-# Lifetime of a client session
-#
-# This configures when sessions expire. The value must have the format
-# `<maxAge>[:<maxIdle>]` where <maxAge> is the maximum lifetime of a session
-# in seconds, and <maxIdle> is the time in seconds after which an idle session
-# (no client requests refering to it) expires.
-#
-# Authentication info is stored in the session, so an expired session will
-# force a user to login again. Be aware a session is created for *every*
-# unique client independent of authentication, so don't bump up the <maxIdle>
-# value too high to avoid consuming lots of RAM for stale sessions.
-#
-# The default <maxAge> is 12 hours, the default <maxIdle> one hour. The
-# minimum valid value for both is 60 (one minute).
-#
-; session_max_age = 43200:3600
 
 # Where to expose the login endpoint
 #

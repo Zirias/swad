@@ -26,7 +26,6 @@ EXP_BZERO_S_RETURN=	void
 swad_VERSION=		0.10
 swad_MODULES=		authenticator \
 			config \
-			csrfprotect \
 			handler/login \
 			handler/root \
 			handler/static \
@@ -45,7 +44,6 @@ swad_MODULES=		authenticator \
 			middleware/cookies \
 			middleware/formdata \
 			middleware/pathparser \
-			middleware/session \
 			proxylist \
 			staticfiles \
 			template \

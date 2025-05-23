@@ -12,7 +12,6 @@
 #include "middleware/cookies.h"
 #include "middleware/formdata.h"
 #include "middleware/pathparser.h"
-#include "middleware/session.h"
 
 #ifdef CRED_EXEC
 #  include "cred/execchecker.h"
@@ -59,7 +58,6 @@ static void setupPipeline(HttpServer *server)
 {
     HttpServer_addMiddleware(server, MW_Compress);
     HttpServer_addMiddleware(server, MW_Cookies);
-    HttpServer_addMiddleware(server, MW_Session);
     HttpServer_addMiddleware(server, MW_PathParser);
     HttpServer_addMiddleware(server, MW_FormData);
 
@@ -163,21 +161,6 @@ static CredentialsChecker *createPowChecker(const CfgChecker *ccfg)
     return CredentialsChecker_createPow(difficulty, user, password);
 }
 #endif
-
-static void configureSession(void)
-{
-    PSC_RateLimitOpts *limitOpts = 0;
-    uint16_t seconds;
-    uint16_t limit;
-    for (size_t i = 0; Config_sessionLimit(cfg, i, &seconds, &limit); ++i)
-    {
-	if (!limitOpts) limitOpts = PSC_RateLimitOpts_create(1);
-	PSC_RateLimitOpts_addLimit(limitOpts, seconds, limit);
-    }
-    MW_SessionOpts_setCreateLimit(limitOpts);
-    MW_SessionOpts_setMaxAge(
-	    Config_sessionMaxAge(cfg), Config_sessionMaxIdle(cfg));
-}
 
 static void configureAuthenticator(void)
 {
@@ -350,7 +333,6 @@ static void reloadConfig(int signo)
     staticHandler_init(Config_resourceDir(cfg));
     configureAuthenticator();
     Authenticator_unlock();
-    configureSession();
 
     const CfgServer *s;
     for (size_t i = 0; (s = Config_server(cfg, i)); ++i)
@@ -403,9 +385,6 @@ static void prestartup(void *receiver, void *sender, void *args)
     loginHandler_setRoute(Config_loginRoute(cfg));
     staticHandler_init(Config_resourceDir(cfg));
 
-    configureSession();
-    MW_Session_init();
-
     Authenticator_init();
     configureAuthenticator();
 
@@ -451,7 +430,6 @@ static void shutdown(void *receiver, void *sender, void *args)
 
     staticHandler_done();
     Authenticator_done();
-    MW_Session_done();
     Config_destroy(cfg);
 }
 

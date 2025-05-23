@@ -74,12 +74,8 @@ const char *Config_pidfile(const Config *self) CMETHOD ATTR_RETNONNULL;
 int Config_resolveHosts(const Config *self) CMETHOD;
 int Config_foreground(const Config *self) CMETHOD;
 PSC_LogLevel Config_logLevel(const Config *self) CMETHOD;
-int Config_sessionLimit(const Config *self,
-	size_t num, uint16_t *seconds, uint16_t *limit) CMETHOD;
 int Config_loginFailLimit(const Config *self,
 	size_t num, uint16_t *seconds, uint16_t *limit) CMETHOD;
-unsigned Config_sessionMaxAge(const Config *self) CMETHOD;
-unsigned Config_sessionMaxIdle(const Config *self) CMETHOD;
 int Config_defaultThreads(const Config *self) CMETHOD;
 int Config_threadsPerCpu(const Config *self) CMETHOD;
 int Config_maxThreads(const Config *self) CMETHOD;

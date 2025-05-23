@@ -92,7 +92,6 @@ struct Config
     size_t realms_capa;
     size_t servers_count;
     size_t servers_capa;
-    size_t nsessionLimits;
     size_t nloginLimits;
     long uid;
     long gid;
@@ -106,10 +105,6 @@ struct Config
     int jobQueuePerThread;
     int maxJobQueue;
     int logLevel;
-    unsigned sessionMax;
-    unsigned sessionIdle;
-    uint16_t sessionSeconds[8];
-    uint16_t sessionLimits[8];
     uint16_t loginSeconds[8];
     uint16_t loginLimits[8];
 };
@@ -535,20 +530,6 @@ static void readOption(Config *self, char *lp)
 	if (boolArg(&self->resolveHostsCfg, value) < 0) goto inval;
 	return;
     }
-    if (!strcmp(key, "session_limit"))
-    {
-	if (self->nsessionLimits == sizeof self->sessionLimits)
-	{
-	    PSC_Log_fmt(PSC_L_WARNING, "config: [%s:%u] too many session "
-		    "limit entries, ignoring", self->cfgfile, lineno);
-	    return;
-	}
-	if (limitsArg(self->sessionSeconds + self->nsessionLimits,
-		    self->sessionLimits + self->nsessionLimits, value)
-		< 0) goto inval;
-	++self->nsessionLimits;
-	return;
-    }
     if (!strcmp(key, "login_fail_limit"))
     {
 	if (self->nloginLimits == sizeof self->loginLimits)
@@ -561,26 +542,6 @@ static void readOption(Config *self, char *lp)
 		    self->loginLimits + self->nloginLimits, value)
 		< 0) goto inval;
 	++self->nloginLimits;
-	return;
-    }
-    if (!strcmp(key, "session_max_age"))
-    {
-	char *endp;
-	errno = 0;
-	long maxidle = 0;
-	long maxage = strtol(value, &endp, 10);
-	if (errno == ERANGE || endp == value || (*endp && *endp != ':')
-		|| maxage < 60 || maxage > UINT_MAX) goto inval;
-	if (*endp)
-	{
-	    char *maxidleval = endp + 1;
-	    errno = 0;
-	    maxidle = strtol(maxidleval, &endp, 10);
-	    if (errno == ERANGE || endp == maxidleval || *endp
-		    || maxidle < 60 || maxidle > UINT_MAX) goto inval;
-	}
-	self->sessionMax = maxage;
-	self->sessionIdle = maxidle;
 	return;
     }
     if (!strcmp(key, "login_route"))
@@ -975,14 +936,7 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers,
     self->resolveHostsCfg = other->resolveHostsCfg;
     self->verbose = other->verbose;
     self->logLevel = other->logLevel;
-    self->sessionMax = other->sessionMax;
-    self->sessionIdle = other->sessionIdle;
-    self->nsessionLimits = other->nsessionLimits;
     self->nloginLimits = other->nloginLimits;
-    memcpy(self->sessionSeconds, other->sessionSeconds,
-	    sizeof self->sessionSeconds);
-    memcpy(self->sessionLimits, other->sessionLimits,
-	    sizeof self->sessionLimits);
     memcpy(self->loginSeconds, other->loginSeconds,
 	    sizeof self->loginSeconds);
     memcpy(self->loginLimits, other->loginLimits,
@@ -1218,24 +1172,6 @@ PSC_LogLevel Config_logLevel(const Config *self)
     else return (self->logLevel);
 }
 
-static const uint16_t defSessionSeconds[] = { 5, 60, 3600 };
-static const uint16_t defSessionLimits[] = { 3, 5, 25 };
-int Config_sessionLimit(const Config *self,
-	size_t num, uint16_t *seconds, uint16_t *limit)
-{
-    if (!self->nsessionLimits)
-    {
-	if (num >= 3) return 0;
-	*seconds = defSessionSeconds[num];
-	*limit = defSessionLimits[num];
-	return 1;
-    }
-    if (num >= self->nsessionLimits) return 0;
-    *seconds = self->sessionSeconds[num];
-    *limit = self->sessionLimits[num];
-    return 1;
-}
-
 int Config_loginFailLimit(const Config *self,
 	size_t num, uint16_t *seconds, uint16_t *limit)
 {
@@ -1243,16 +1179,6 @@ int Config_loginFailLimit(const Config *self,
     *seconds = self->loginSeconds[num];
     *limit = self->loginLimits[num];
     return 1;
-}
-
-unsigned Config_sessionMaxAge(const Config *self)
-{
-    return self->sessionMax;
-}
-
-unsigned Config_sessionMaxIdle(const Config *self)
-{
-    return self->sessionIdle;
 }
 
 int Config_defaultThreads(const Config *self)
