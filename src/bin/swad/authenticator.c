@@ -204,8 +204,10 @@ AuthResult Authenticator_silentLogin(Authenticator *self)
     {
 	const Realm *otherRealm = PSC_HashTableIterator_current(i);
 	if (otherRealm == self->realm) continue;
+	char *otherCookieNm = createCookieName(PSC_HashTableIterator_key(i));
 	Jwt *otherToken = getVerifiedToken(self->cookies,
-		otherRealm, self->cookienm);
+		otherRealm, otherCookieNm);
+	free(otherCookieNm);
 	if (!otherToken) continue;
 	const char *checker = Jwt_iss(otherToken) + (sizeof ISS_NS - 1);
 	while (PSC_ListIterator_moveNext(j))
