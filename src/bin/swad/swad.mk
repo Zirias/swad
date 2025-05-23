@@ -82,6 +82,20 @@ ifneq ($(findstring -solaris,$(TARGETARCH)),)
 swad_PRECFLAGS+=	-D__EXTENSIONS__
 endif
 
+ifneq ($(OPENSSLINC)$(OPENSSLLIB),)
+  ifeq ($(OPENSSLINC),)
+$(error OPENSSLLIB specified without OPENSSLINC)
+  endif
+  ifeq ($(OPENSSLLIB),)
+$(error OPENSSLINC specified without OPENSSLLIB)
+  endif
+swad_INCLUDES+=		-I$(OPENSSLINC)
+swad_LDFLAGS+=		-L$(OPENSSLLIB)
+swad_LIBS+=		crypto
+else
+swad_PKGDEPS+=		libcrypto
+endif
+
 ifeq ($(CRED_EXEC),1)
 swad_MODULES+=		cred/execchecker
 swad_DEFINES+=		-DCRED_EXEC
@@ -106,19 +120,6 @@ swad_DEFINES+=		-DCRED_POW
 swad_SFILES+=		pow.mjs
 swad_TMPL+=		pow
 swad_DOCS+=		README.pow.md
-  ifneq ($(OPENSSLINC)$(OPENSSLLIB),)
-    ifeq ($(OPENSSLINC),)
-$(error OPENSSLLIB specified without OPENSSLINC)
-    endif
-    ifeq ($(OPENSSLLIB),)
-$(error OPENSSLINC specified without OPENSSLLIB)
-    endif
-swad_INCLUDES+=		-I$(OPENSSLINC)
-swad_LDFLAGS+=		-L$(OPENSSLLIB)
-swad_LIBS+=		crypto
-  else
-swad_PKGDEPS+=		libcrypto
-  endif
 endif
 
 ifeq ($(BUNDLED_POSER),1)
