@@ -106,8 +106,11 @@ done:
     if (!rdr) rdr = "/";
     if (rdrErr || rdrUser)
     {
+	char *encRealm = urlencode(realm);
+	char *encRdr = urlencode(authrdr);
 	char *encUser = 0;
-	size_t qslen = strlen(rdr);
+	size_t qslen = strlen(rdr) + strlen(encRealm) + strlen(encRdr)
+	    + sizeof "?&=" QP_RDR QP_REALM;
 	if (rdrErr)
 	{
 	    qslen += sizeof "?" QP_ERRNO "=";
@@ -120,12 +123,17 @@ done:
 	char *rdrqs = PSC_malloc(qslen + 1);
 	if (rdrErr)
 	{
-	    if (encUser) sprintf(rdrqs, "%s?" QP_ERRNO "=%d&" QP_USER "=%s",
-		    rdr, rdrErr, encUser);
-	    else sprintf(rdrqs, "%s?" QP_ERRNO "=%d", rdr, rdrErr);
+	    if (encUser) sprintf(rdrqs, "%s?" QP_REALM "=%s&" QP_RDR "=%s&"
+		    QP_ERRNO "=%d&" QP_USER "=%s",
+		    rdr, encRealm, encRdr, rdrErr, encUser);
+	    else sprintf(rdrqs, "%s?" QP_REALM "=%s&" QP_RDR "=%s&"
+		    QP_ERRNO "=%d", rdr, encRealm, encRdr, rdrErr);
 	}
-	else sprintf(rdrqs, "%s?" QP_USER "=%s", rdr, encUser);
+	else sprintf(rdrqs, "%s?" QP_REALM "=%s&" QP_RDR "=%s&"
+		QP_USER "=%s", rdr, encRealm, encRdr, encUser);
 	free(encUser);
+	free(encRdr);
+	free(encRealm);
 	HttpContext_setResponse(context,
 		HttpResponse_createRedirect(status, rdrqs));
 	free(rdrqs);
