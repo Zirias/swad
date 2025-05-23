@@ -36,7 +36,6 @@ void rootHandler(HttpContext *context)
 
     Authenticator *auth = Authenticator_create(context, realm);
     const User *user = Authenticator_user(auth);
-    Authenticator_destroy(auth);
 
     if (user)
     {
@@ -69,6 +68,7 @@ void rootHandler(HttpContext *context)
 	response = HttpResponse_createRedirect(HTTP_FORBIDDEN, responsebuf);
 	free(rdrenc);
     }
+    Authenticator_destroy(auth);
 
 done:
     HttpContext_setResponse(context, response);

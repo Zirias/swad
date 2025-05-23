@@ -151,19 +151,18 @@ static void showForm(HttpContext *context, const PathParser *pathParser)
     if (!user && Authenticator_silentLogin(auth) == AR_OK)
     {
 	user = Authenticator_user(auth);
-	Authenticator_destroy(auth);
 	PSC_Log_fmt(PSC_L_INFO, "login: %s silently logged in for %s",
 		User_username(user), realm);
 	HttpContext_setResponse(context,
 		HttpResponse_createRedirect(HTTP_OK,
 		    loginHandler_rdr(hdr, pathParser)));
+	Authenticator_destroy(auth);
 	return;
     }
     const uint8_t *tdata;
     size_t tsz;
     if (user) tdata = Authenticator_logoutTmpl(auth, &tsz);
     else tdata = Authenticator_loginTmpl(auth, &tsz);
-    Authenticator_destroy(auth);
 
     Template *tmpl = Template_createStatic(tdata, tsz);
     if (user)
@@ -217,6 +216,7 @@ static void showForm(HttpContext *context, const PathParser *pathParser)
     HttpResponse *response = HttpResponse_create(HTTP_OK, MT_HTML);
     HttpResponse_passTextBody(response, Template_processHtml(tmpl));
     Template_destroy(tmpl);
+    Authenticator_destroy(auth);
     HttpContext_setResponse(context, response);
 }
 
