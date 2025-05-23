@@ -117,7 +117,7 @@ static void deviate(void *obj, const Authenticator *auth)
     Template_setStaticVar(tmpl, "EXP", expstr, TF_NONE);
     Template_setStaticVar(tmpl, "SELF", path, TF_NONE);
     Template_setStaticVar(tmpl, "USER", self->user, TF_HTML);
-    Template_setStaticVar(tmpl, "CHALLENGE", challenge, TF_NONE);
+    Template_passVar(tmpl, "CHALLENGE", challenge, TF_NONE);
     Template_setStaticVar(tmpl, "DIFFICULTY", difficulty, TF_NONE);
     Template_setStaticVar(tmpl, "STYLELINK", stylelink, TF_NONE);
     Template_setStaticVar(tmpl, "SCRIPTLINK", scriptlink, TF_NONE);
@@ -142,10 +142,11 @@ static AuthResult check(void *obj, const char *user, const char *pw,
 	if (!expstr) goto checkdeviate;
 	long long exp = strtoll(expstr, 0, 16);
 	if (time(0) >= exp) goto checkdeviate;
-	const char *challenge = createChallenge(context, expstr);
+	char *challenge = createChallenge(context, expstr);
 	if (!challenge) goto checkdeviate;
 	char tohash[128];
 	int tohashlen = snprintf(tohash, sizeof tohash, "%s%s", challenge, pw);
+	free(challenge);
 	unsigned char hash[SHA256_DIGEST_LENGTH];
 	SHA256((const unsigned char *)tohash, tohashlen, hash);
 	for (unsigned i = 0; i < self->difficulty; ++i)
