@@ -64,7 +64,7 @@ void Cookies_setCookie(Cookies *self, const char *name, const char *value,
 	int64_t expires)
 {
     char encnm[MAXENCNAMELEN + 1];
-    if (strlen(value) > MAXNAMELEN)
+    if (strlen(name) > MAXNAMELEN)
     {
 	PSC_Log_msg(PSC_L_WARNING, "cookie: Name too long, ignoring");
 	return;
@@ -82,12 +82,24 @@ void Cookies_setCookie(Cookies *self, const char *name, const char *value,
     PSC_HashTable_set(self->out, encnm, cookie, deleteSetCookie);
 }
 
-void Cookie_deleteCookie(Cookies *self, const char *name)
+void Cookies_deleteCookie(Cookies *self, const char *name)
 {
+    char encnm[MAXENCNAMELEN + 1];
+    if (strlen(name) > MAXNAMELEN)
+    {
+	PSC_Log_msg(PSC_L_WARNING, "cookie: Name too long, ignoring");
+	return;
+    }
+    size_t encsz = sizeof encnm;
+    size_t encpos = 0;
+    char *encbuf = encnm;
+    urlencodeto(&encbuf, &encsz, &encpos, name);
+    encnm[encpos] = 0;
+
     if (!self->out) self->out = PSC_HashTable_create(5);
     SetCookie *cookie = PSC_malloc(sizeof *cookie);
     memset(cookie, 0, sizeof *cookie);
-    PSC_HashTable_set(self->out, name, cookie, deleteSetCookie);
+    PSC_HashTable_set(self->out, encnm, cookie, deleteSetCookie);
 }
 
 void MW_Cookies(HttpContext *context)
