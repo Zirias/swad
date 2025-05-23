@@ -2,7 +2,8 @@
 
 #include "authenticator.h"
 
-#include "middleware/session.h"
+#include "jwt.h"
+#include "middleware/cookies.h"
 #include "tmpl.h"
 
 #include <fcntl.h>
@@ -11,15 +12,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
-#define SESSKEY "swad_authinfo"
-
-typedef struct AuthInfo
-{
-    User *user;
-    unsigned version;
-} AuthInfo;
+#define COOKIE_NS "swad."
+#define ISS_NS "urn:fdc:sekrit.de:2025:swad:"
+#define TOKEN_LIFETIME 86400U
 
 typedef struct Realm
 {
@@ -32,23 +30,25 @@ typedef struct Realm
     uint8_t *t_logout;
     size_t t_login_sz;
     size_t t_logout_sz;
-    unsigned version;
+    int64_t version;
 } Realm;
 
 struct Authenticator
 {
     HttpContext *context;
-    PSC_HashTable *authInfos;
+    Cookies *cookies;
     const char *realmnm;
     Realm *realm;
+    char *cookienm;
+    Jwt *token;
+    User *user;
     CredentialsChecker *deviate;
 };
 
 struct User
 {
-    char *username;
-    char *realname;
-    const char *checker;
+    const char *username;
+    const char *realname;
 };
 
 static PSC_HashTable *checkers;
@@ -56,34 +56,6 @@ static PSC_HashTable *realms;
 static PSC_RateLimitOpts *defaultLimitOpts;
 
 static pthread_mutex_t authlock;
-
-static User *createUser(const char *username, char *realname,
-	const char *checker)
-{
-    User *user = PSC_malloc(sizeof *user);
-    user->username = PSC_copystr(username);
-    user->realname = realname;
-    user->checker = checker;
-    return user;
-}
-
-static User *copyUser(const User *other)
-{
-    User *user = PSC_malloc(sizeof *user);
-    user->username = PSC_copystr(other->username);
-    user->realname = PSC_copystr(other->realname);
-    user->checker = other->checker;
-    return user;
-}
-
-static void deleteUser(void *obj)
-{
-    if (!obj) return;
-    User *user = obj;
-    free(user->realname);
-    free(user->username);
-    free(user);
-}
 
 static void deleteRealm(void *obj)
 {
@@ -98,78 +70,86 @@ static void deleteRealm(void *obj)
     free(realm);
 }
 
-static void deleteAuthInfo(void *obj)
+static char *createCookieName(const char *realm)
 {
-    if (!obj) return;
-    AuthInfo *self = obj;
-    deleteUser(self->user);
-    free(self);
+    size_t realmlen = strlen(realm);
+    char *nm = PSC_malloc(realmlen + sizeof COOKIE_NS);
+    memcpy(nm, COOKIE_NS, sizeof COOKIE_NS - 1);
+    memcpy(nm + sizeof COOKIE_NS - 1, realm, realmlen + 1);
+    return nm;
 }
 
-static void deleteAuthInfos(void *obj)
+static char *createIssuer(const char *checker)
 {
-    PSC_HashTable_destroy(obj);
+    size_t checkerlen = strlen(checker);
+    char *nm = PSC_malloc(checkerlen + sizeof ISS_NS);
+    memcpy(nm, ISS_NS, sizeof ISS_NS - 1);
+    memcpy(nm + sizeof ISS_NS - 1, checker, checkerlen + 1);
+    return nm;
 }
 
-static PSC_HashTable *getAuthInfos(HttpContext *context)
+static int verifyToken(Jwt *token, const Realm *realm)
 {
-    Session *session = Session_get(context);
-    if (!session) return 0;
-    PSC_HashTable *authInfos = Session_getProp(session, SESSKEY);
-    if (!authInfos)
+    if (!Jwt_valid(token)) return 0;
+    if (!Jwt_sub(token)) return 0;
+    const char *iss = Jwt_iss(token);
+    if (!iss) return 0;
+    if (strncmp(iss, ISS_NS, sizeof ISS_NS - 1)) return 0;
+    int64_t exp = Jwt_exp(token);
+    if (time(0) >= exp) return 0;
+    const PSC_Json *json = Jwt_json(token);
+    const PSC_Json *authtime = PSC_Json_property(json, "auth_time", 9);
+    if (!authtime) return 0;
+    if (PSC_Json_integer(authtime) < realm->version) return 0;
+    return 1;
+}
+
+static Jwt *getVerifiedToken(Cookies *cookies, const Realm *realm,
+	const char *cookienm)
+{
+    if (!realm) return 0;
+    const char *tokenstr = Cookies_getCookie(cookies, cookienm);
+    if (!tokenstr) return 0;
+    Jwt *token = 0;
+    if (!(token = Jwt_parse(tokenstr)) || !verifyToken(token, realm))
     {
-	authInfos = PSC_HashTable_create(4);
-	Session_setProp(session, SESSKEY, authInfos, deleteAuthInfos);
+	Cookies_deleteCookie(cookies, cookienm);
+	Jwt_destroy(token);
+	token = 0;
     }
-    return authInfos;
+    return token;
+}
+
+static User *createFromToken(Jwt *token)
+{
+    if (!token) return 0;
+    User *user = PSC_malloc(sizeof *user);
+    user->username = Jwt_sub(token);
+    const PSC_Json *json = Jwt_json(token);
+    const PSC_Json *nameclaim = PSC_Json_property(json, "name", 4);
+    user->realname = nameclaim ? PSC_Json_string(nameclaim) : 0;
+    return user;
 }
 
 Authenticator *Authenticator_create(HttpContext *context, const char *realm)
 {
     Authenticator *self = PSC_malloc(sizeof *self);
     self->context = context;
-    self->authInfos = getAuthInfos(context);
     self->realmnm = realm ? realm : DEFAULT_REALM;
+    pthread_mutex_lock(&authlock);
     self->realm = PSC_HashTable_get(realms, self->realmnm);
+    pthread_mutex_unlock(&authlock);
+    self->cookies = Cookies_get(context);
+    self->cookienm = createCookieName(realm);
+    self->token = getVerifiedToken(self->cookies, self->realm, self->cookienm);
+    self->user = createFromToken(self->token);
     self->deviate = 0;
     return self;
 }
 
-static AuthInfo *getAuthInfo(Authenticator *self, int create)
-{
-    if (!self->authInfos)
-    {
-	if (create)
-	{
-	    if (!Session_start(self->context)) return 0;
-	    self->authInfos = getAuthInfos(self->context);
-	    if (!self->authInfos) return 0;
-	}
-	else return 0;
-    }
-    AuthInfo *authInfo = PSC_HashTable_get(self->authInfos, self->realmnm);
-    if (self->realm && authInfo && authInfo->version != self->realm->version)
-    {
-	PSC_HashTable_delete(self->authInfos, self->realmnm);
-	authInfo = 0;
-    }
-    if (create && !authInfo)
-    {
-	authInfo = PSC_malloc(sizeof *authInfo);
-	memset(authInfo, 0, sizeof *authInfo);
-	PSC_HashTable_set(self->authInfos, self->realmnm,
-		authInfo, deleteAuthInfo);
-    }
-    return authInfo;
-}
-
 const User *Authenticator_user(const Authenticator *self)
 {
-    pthread_mutex_lock(&authlock);
-    AuthInfo *authInfo = getAuthInfo((Authenticator *)self, 0);
-    User *user = authInfo ? authInfo->user : 0;
-    pthread_mutex_unlock(&authlock);
-    return user;
+    return self->user;
 }
 
 const char *Authenticator_realm(const Authenticator *self)
@@ -212,41 +192,49 @@ HttpContext *Authenticator_context(const Authenticator *self)
 
 AuthResult Authenticator_silentLogin(Authenticator *self)
 {
+    if (self->user) return AR_OK;
     AuthResult result = AR_FAILED;
-    if (!self->realm || !self->authInfos
-	    || !PSC_List_size(self->realm->checkers)) return result;
+    if (!self->realm || !PSC_List_size(self->realm->checkers)) return result;
     pthread_mutex_lock(&authlock);
     PSC_HashTableIterator *i = 0;
     PSC_ListIterator *j = 0;
-    AuthInfo *authInfo = getAuthInfo(self, 0);
-    if (authInfo && authInfo->user) goto done;
     j = PSC_List_iterator(self->realm->checkers);
-    for (i = PSC_HashTable_iterator(self->authInfos);
+    for (i = PSC_HashTable_iterator(realms);
 	    PSC_HashTableIterator_moveNext(i); )
     {
-	const AuthInfo *otherInfo = PSC_HashTableIterator_current(i);
-	if (!otherInfo->user) continue;
-	const Realm *otherRealm = PSC_HashTable_get(realms,
-		PSC_HashTableIterator_key(i));
-	if (!otherRealm) continue;
-	if (otherInfo->version != otherRealm->version) continue;
+	const Realm *otherRealm = PSC_HashTableIterator_current(i);
+	if (otherRealm == self->realm) continue;
+	Jwt *otherToken = getVerifiedToken(self->cookies,
+		otherRealm, self->cookienm);
+	if (!otherToken) continue;
+	const char *checker = Jwt_iss(otherToken) + (sizeof ISS_NS - 1);
 	while (PSC_ListIterator_moveNext(j))
 	{
-	    if (strcmp(otherInfo->user->checker,
-			PSC_ListIterator_current(j))) continue;
-	    if (!authInfo) authInfo = getAuthInfo(self, 1);
-	    authInfo->user = copyUser(otherInfo->user);
-	    goto done;
+	    if (strcmp(checker, PSC_ListIterator_current(j))) continue;
+	    self->token = Jwt_create(Jwt_iss(otherToken),
+		    Jwt_sub(otherToken), TOKEN_LIFETIME);
+	    time_t now = time(0);
+	    PSC_Json *authtime = PSC_Json_createInteger(now);
+	    Jwt_set(self->token, "auth_time", authtime);
+	    const PSC_Json *json = Jwt_json(otherToken);
+	    const PSC_Json *otherName = PSC_Json_property(json, "name", 4);
+	    if (otherName)
+	    {
+		PSC_Json *name = PSC_Json_createString(
+			PSC_Json_string(otherName), 0);
+		Jwt_set(self->token, "name", name);
+	    }
+	    char *tokenstr = Jwt_issue(self->token, now, JSA_HS256);
+	    Cookies_setCookie(self->cookies, self->cookienm,
+		    tokenstr, now + TOKEN_LIFETIME);
+	    self->user = createFromToken(self->token);
+	    result = AR_OK;
+	    break;
 	}
+	Jwt_destroy(otherToken);
     }
-done:
     PSC_HashTableIterator_destroy(i);
     PSC_ListIterator_destroy(j);
-    if (authInfo && authInfo->user)
-    {
-	authInfo->version = self->realm->version;
-	result = AR_OK;
-    }
     pthread_mutex_unlock(&authlock);
     return result;
 }
@@ -297,7 +285,6 @@ AuthResult Authenticator_login(Authenticator *self,
 	    goto done;
 	}
     }
-    AuthInfo *authInfo = 0;
     PSC_ListIterator *i = PSC_List_iterator(self->realm->checkers);
     while (result == AR_FAILED && PSC_ListIterator_moveNext(i))
     {
@@ -309,10 +296,22 @@ AuthResult Authenticator_login(Authenticator *self,
 	    result = checker->check(checker, user, pw, self, &realname);
 	    if (result == AR_OK)
 	    {
-		authInfo = getAuthInfo(self, 1);
-		deleteUser(authInfo->user);
-		authInfo->user = createUser(user, realname, checkerName);
-		authInfo->version = self->realm->version;
+		free(self->user);
+		Jwt_destroy(self->token);
+		char *iss = createIssuer(checkerName);
+		self->token = Jwt_create(iss, user, TOKEN_LIFETIME);
+		time_t now = time(0);
+		PSC_Json *authtime = PSC_Json_createInteger(now);
+		Jwt_set(self->token, "auth_time", authtime);
+		if (realname)
+		{
+		    PSC_Json *name = PSC_Json_createString(realname, 0);
+		    Jwt_set(self->token, "name", name);
+		}
+		char *tokenstr = Jwt_issue(self->token, now, JSA_HS256);
+		Cookies_setCookie(self->cookies, self->cookienm,
+			tokenstr, now + TOKEN_LIFETIME);
+		self->user = createFromToken(self->token);
 	    }
 	    else if (result == AR_DEVIATE)
 	    {
@@ -352,18 +351,22 @@ int Authenticator_deviate(Authenticator *self)
 
 void Authenticator_logout(Authenticator *self)
 {
-    pthread_mutex_lock(&authlock);
-    AuthInfo *authInfo = getAuthInfo(self, 0);
-    if (authInfo && authInfo->user)
+    if (self->token)
     {
-	deleteUser(authInfo->user);
-	authInfo->user = 0;
+	free(self->user);
+	self->user = 0;
+	Jwt_destroy(self->token);
+	self->token = 0;
+	Cookies_deleteCookie(self->cookies, self->cookienm);
     }
-    pthread_mutex_unlock(&authlock);
 }
 
 void Authenticator_destroy(Authenticator *self)
 {
+    if (!self) return;
+    free(self->user);
+    Jwt_destroy(self->token);
+    free(self->cookienm);
     free(self);
 }
 
@@ -483,7 +486,7 @@ void Authenticator_registerRealm(const char *name, const char *tmplPath,
 	{
 	    PSC_List_destroy(realm->checkers);
 	    realm->checkers = checkerNames;
-	    ++realm->version;
+	    realm->version = time(0);
 	}
 	if ((!realm->limitOpts && !limitOpts) ||
 		(realm->limitOpts && limitOpts &&
@@ -509,7 +512,7 @@ void Authenticator_registerRealm(const char *name, const char *tmplPath,
 	realm->limitOpts = limitOpts;
 	realm->failLimit = 0;
 	realm->blocks = 0;
-	realm->version = 0;
+	realm->version = time(0);
 	PSC_HashTable_set(realms, realm->name, realm, deleteRealm);
     }
     initTmpl(tmplPath, "login", name, &realm->t_login, &realm->t_login_sz);
