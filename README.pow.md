@@ -46,11 +46,6 @@ with just an instant of waiting.
   creating the challenge. The expiration timestamp is sent back from the
   client together with the solving nonce, so the exact same challenge can be
   constructed again for verification.
-* Anubis issues a signed JWT on success, swad works with a server-side session
-  identified by a random session ID. The advantage of the JWT is not requiring
-  any server-side state and therefore saving server RAM, the advantage of the
-  session is fewer work for verification and fewer extra data added to the
-  traffic.
 
 ## How to let visitors know of the guest login?
 

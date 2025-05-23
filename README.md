@@ -44,10 +44,9 @@ basically the same thing also known from `Anubis`, see
 
 * Optional HTTPS support
 * Privilege dropping and separation
-* Protection against CSRF (Cross-site request forgery)
-* Configurable rate-limit for creating new sessions (protect against DoS)
-* Configurable rate-limit for failed logins per session, realm and user name
-  (protect against brute-force)
+* Configurable rate-limit for failed logins per remote host, realm and user
+  name (protect against brute-force)
+* Signed JWTs (Json Web Tokens) for storing authentication info on the client
 * Multiple methods to obtain random data, prefering "better" ones like
   arc4random or getrandom
 * Zero-out memory holding sensitive data (passwords, hashes) as soon as it
@@ -91,11 +90,11 @@ Also, the following manpages are built and installed:
 
 ## How it works
 
-`swad` offers cookie authentication using a randomly generated session cookie
-and storing all other state server-side in RAM. It exposes two endpoints, one
-for checking authentication and one for performing logins. Both endpoints
-accept two parametes, either from the query string, or from a custom header
-which takes precedence if both are present:
+`swad` offers cookie authentication using signed Json Web Tokens with
+configurable parameters. It exposes two endpoints, one for checking
+authentication and one for performing logins. Both endpoints accept two
+parametes, either from the query string, or from a custom header which takes
+precedence if both are present:
 
 * The realm name. If this is missing, a default name of `SWAD` is assumed.
   - Query string: `realm`
@@ -194,7 +193,7 @@ configuring `login_route` in `swad.conf`.
 Some key aspects to make this work are:
 
 * We make sure to always pass `Set-Cookie` headers from `swad`. Otherwise,
-  `swad` couldn't correctly establish the user session.
+  `swad` couldn't correctly delete and/or refresh tokens.
 * We always pass the realm and redirect uri with every request checking
   authentication. The realm is strictly needed for checking authentication,
   the redirect uri is only used for logging here.
@@ -210,8 +209,8 @@ Some key aspects to make this work are:
   requests. `swad`'s authentication endpoint only supports `GET`.
 
 A few settings aren't strictly required, but make things nicer: We disable any
-caching for the `/secret` route, so e.g. an expired `swad` session is
-discovered immediately and performs a redirect to `/login`.
+caching for the `/secret` route, so e.g. an expired token is discovered
+immediately and performs a redirect to `/login`.
 
 Here's a minimal `swad.conf` example to match this nginx configuration:
 
@@ -266,9 +265,7 @@ Dependencies:
   (GNU GCC and LLVM clang work fine)
 * GNU make
 * zlib
-* OpenSSL, or a compatible implementation like LibreSSL, when building with
-  bundled poser and TLS enabled, or when building with the POW credentials
-  checker
+* OpenSSL, or a compatible implementation like LibreSSL
 * PAM (libpam and headers) when building with the PAM credentials checker
 
 To build and install swad, you can simply type
@@ -299,16 +296,6 @@ The following build options are available:
   library.
 
   Default: `on`.
-
-* `WITH_POSER_TLS` (bool, only for `BUNDLED_POSER=on`): Build with TLS
-  support, required for https.
-
-  Default: `on`.
-
-* `OPENSSLINC`/`OPENSSLLIB` (paths, only for `WITH_POSER_TLS=on` or
-  `CRED_POW=on`): Override base paths to OpenSSL includes and libraries.
-
-  Default: Obtain from pkg-config.
 
 * `WITH_POSER_POLL` (bool, only for `BUNDLED_POSER=on`): Use `poll()` instead
   of `select()` for obtaining events when neither `kqueue()` nor `epoll()`
@@ -386,6 +373,11 @@ The following build options are available:
   macro package for troff.
 
   Default: `mdoc` if the OS name contains "BSD", `man` otherwise
+
+* `OPENSSLINC`/`OPENSSLLIB` Override base paths to OpenSSL includes and
+  libraries.
+
+  Default: Obtain from pkg-config.
 
 * `CRED_EXEC` (bool): Build with the "exec" credentials checker.
 
