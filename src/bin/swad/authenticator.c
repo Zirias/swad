@@ -227,6 +227,7 @@ AuthResult Authenticator_silentLogin(Authenticator *self)
 	    char *tokenstr = Jwt_issue(self->token, now, JSA_HS256);
 	    Cookies_setCookie(self->cookies, self->cookienm,
 		    tokenstr, now + TOKEN_LIFETIME);
+	    free(tokenstr);
 	    self->user = createFromToken(self->token);
 	    result = AR_OK;
 	    break;
@@ -300,6 +301,7 @@ AuthResult Authenticator_login(Authenticator *self,
 		Jwt_destroy(self->token);
 		char *iss = createIssuer(checkerName);
 		self->token = Jwt_create(iss, user, TOKEN_LIFETIME);
+		free(iss);
 		time_t now = time(0);
 		PSC_Json *authtime = PSC_Json_createInteger(now);
 		Jwt_set(self->token, "auth_time", authtime);
@@ -311,6 +313,7 @@ AuthResult Authenticator_login(Authenticator *self,
 		char *tokenstr = Jwt_issue(self->token, now, JSA_HS256);
 		Cookies_setCookie(self->cookies, self->cookienm,
 			tokenstr, now + TOKEN_LIFETIME);
+		free(tokenstr);
 		self->user = createFromToken(self->token);
 	    }
 	    else if (result == AR_DEVIATE)
