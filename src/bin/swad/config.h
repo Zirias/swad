@@ -76,6 +76,11 @@ int Config_foreground(const Config *self) CMETHOD;
 PSC_LogLevel Config_logLevel(const Config *self) CMETHOD;
 int Config_loginFailLimit(const Config *self,
 	size_t num, uint16_t *seconds, uint16_t *limit) CMETHOD;
+const char *Config_cookieNs(const Config *self) CMETHOD ATTR_RETNONNULL;
+const char *Config_issUrn(const Config *self) CMETHOD ATTR_RETNONNULL;
+uint64_t Config_tokenLifetime(const Config *self) CMETHOD;
+uint64_t Config_tokenRefresh(const Config *self) CMETHOD;
+uint64_t Config_authMaxAge(const Config *self) CMETHOD;
 int Config_defaultThreads(const Config *self) CMETHOD;
 int Config_threadsPerCpu(const Config *self) CMETHOD;
 int Config_maxThreads(const Config *self) CMETHOD;

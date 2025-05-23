@@ -80,6 +80,56 @@
 #
 ; login_fail_limit = 900:5
 
+# Namespace for authentication cookies
+#
+# For authentication, swad creates one signed JWT (Json Web Token) per
+# authenticated realm, stored in cookies with the url-encoded realm's name
+# and prefixed with a fixed namespace string.
+#
+; cookie_namespace = swad.
+
+# URN prefix for the token issuer
+#
+# The issuer field for tokens created by swad uses a URN identifying the
+# credentials checker that allowed the login. The prefix of this URN can be
+# configured. By default, a custom URN namespace 'x-swad-credchecker' is used,
+# which is officially deprecated, all URNs should use actually registered
+# namespaces (NID).
+#
+# It is recommended to configure this using a valid NID to build a unique URN.
+# For example, the 'fdc' NID can be used together with a domain name that is
+# or was under your authority, and a year. If you owned 'example.com' in the
+# year 2024, you could for example use this value:
+#
+#     urn:fdc:example.com:2024:swad:
+#
+; issuer_urn_prefix = urn:x-swad-credchecker:
+
+# Lifetime of a token in seconds
+#
+# The default value (86400) corresponds to 24 hours.
+#
+; token_lifetime = 86400
+
+# When to automatically refresh a token
+#
+# swad will automatically issue a new token when a still valid token is
+# received that is getting close to its expiry. Here you can configure the
+# number of seconds before expiry that will trigger refreshing the token.
+#
+# The default value (7200) corresponds to two hours.
+#
+; token_refresh = 7200
+
+# Maximum time allowed since last actual login in seconds
+#
+# Even when regularly refreshing a token, swad will ultimately reject it when
+# the time passed since a login was performed exceeds a certain value.
+#
+# The default value (1209600) corresponds to two weeks.
+#
+; auth_max_age = 1209600
+
 # Where to expose the login endpoint
 #
 # This configures the base route for the login endpoint, including its

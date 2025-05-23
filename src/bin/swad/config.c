@@ -21,15 +21,20 @@
 
 #define ARGBUFSZ 8
 
-#define DEFCONFFILE	SYSCONFDIR "/swad.conf"
-#define DEFPIDFILE	RUNSTATEDIR "/swad.pid"
-#define DEFRESDIR	SYSCONFDIR "/swad"
-#define DEFNTHREADS	16
-#define DEFCPUNTHR	4
-#define DEFMAXTHREADS	256
-#define DEFCPUNTHRBLOCK	6
-#define DEFTHRJOBQUEUE	16
-#define DEFMAXJOBQUEUE	512
+#define DEFCONFFILE	    SYSCONFDIR "/swad.conf"
+#define DEFPIDFILE	    RUNSTATEDIR "/swad.pid"
+#define DEFRESDIR	    SYSCONFDIR "/swad"
+#define DEFNTHREADS	    16
+#define DEFCPUNTHR	    4
+#define DEFMAXTHREADS	    256
+#define DEFCPUNTHRBLOCK	    6
+#define DEFTHRJOBQUEUE	    16
+#define DEFMAXJOBQUEUE	    512
+#define DEFCOOKIENS	    "swad."
+#define DEFISSURN	    "urn:x-swad-credchecker:"
+#define DEFTOKENLIFETIME    86400U
+#define DEFTOKENREFRESH	    7200U
+#define DEFAUTHMAXAGE	    1209600U
 
 struct CfgChecker
 {
@@ -86,6 +91,8 @@ struct Config
     char *loginRoute;
     char *staticRoute;
     char *resourceDir;
+    char *cookieNs;
+    char *issUrn;
     size_t checkers_count;
     size_t checkers_capa;
     size_t realms_count;
@@ -95,6 +102,9 @@ struct Config
     size_t nloginLimits;
     long uid;
     long gid;
+    unsigned long tokenLifetime;
+    unsigned long tokenRefresh;
+    unsigned long authMaxAge;
     int resolveHosts;
     int resolveHostsCfg;
     int foreground;
@@ -133,6 +143,16 @@ static int intArg(int *setting, const char *op, int min, int max, int base)
     errno = 0;
     long val = strtol(op, &endp, base);
     if (errno == ERANGE || *endp || val < min || val > max) return -1;
+    *setting = val;
+    return 0;
+}
+
+static int ulongArg(unsigned long *setting, const char *op, int base)
+{
+    char *endp;
+    errno = 0;
+    unsigned long val = strtoul(op, &endp, base);
+    if (errno == ERANGE || *endp) return -1;
     *setting = val;
     return 0;
 }
@@ -544,6 +564,33 @@ static void readOption(Config *self, char *lp)
 	++self->nloginLimits;
 	return;
     }
+    if (!strcmp(key, "cookie_namespace"))
+    {
+	free(self->cookieNs);
+	self->cookieNs = PSC_copystr(value);
+	return;
+    }
+    if (!strcmp(key, "issuer_urn_prefix"))
+    {
+	free(self->issUrn);
+	self->issUrn = PSC_copystr(value);
+	return;
+    }
+    if (!strcmp(key, "token_lifetime"))
+    {
+	if (ulongArg(&self->tokenLifetime, value, 10) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "token_refresh"))
+    {
+	if (ulongArg(&self->tokenRefresh, value, 10) < 0) goto inval;
+	return;
+    }
+    if (!strcmp(key, "auth_max_age"))
+    {
+	if (ulongArg(&self->authMaxAge, value, 10) < 0) goto inval;
+	return;
+    }
     if (!strcmp(key, "login_route"))
     {
 	free(self->loginRoute);
@@ -950,6 +997,15 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers,
     free(self->resourceDir);
     self->resourceDir = other->resourceDir;
     other->resourceDir = 0;
+    free(self->cookieNs);
+    self->cookieNs = other->cookieNs;
+    other->cookieNs = 0;
+    free(self->issUrn);
+    self->issUrn = other->issUrn;
+    other->issUrn = 0;
+    self->tokenLifetime = other->tokenLifetime;
+    self->tokenRefresh = other->tokenRefresh;
+    self->authMaxAge = other->authMaxAge;
 
     for (size_t i = 0; i < self->servers_count; ++i)
     {
@@ -1179,6 +1235,36 @@ int Config_loginFailLimit(const Config *self,
     *seconds = self->loginSeconds[num];
     *limit = self->loginLimits[num];
     return 1;
+}
+
+const char *Config_cookieNs(const Config *self)
+{
+    if (!self->cookieNs) return DEFCOOKIENS;
+    return self->cookieNs;
+}
+
+const char *Config_issUrn(const Config *self)
+{
+    if (!self->issUrn) return DEFISSURN;
+    return self->issUrn;
+}
+
+uint64_t Config_tokenLifetime(const Config *self)
+{
+    if (!self->tokenLifetime) return DEFTOKENLIFETIME;
+    return self->tokenLifetime;
+}
+
+uint64_t Config_tokenRefresh(const Config *self)
+{
+    if (!self->tokenRefresh) return DEFTOKENREFRESH;
+    return self->tokenRefresh;
+}
+
+uint64_t Config_authMaxAge(const Config *self)
+{
+    if (!self->authMaxAge) return DEFAUTHMAXAGE;
+    return self->authMaxAge;
 }
 
 int Config_defaultThreads(const Config *self)

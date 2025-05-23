@@ -55,7 +55,9 @@ void Authenticator_destroy(Authenticator *self);
 const char *User_username(const User *self) CMETHOD ATTR_RETNONNULL;
 const char *User_realname(const User *self) CMETHOD;
 
-void Authenticator_init(void);
+void Authenticator_init(const char *cookieNs, const char *issUrn,
+	uint64_t tokenLifetime, uint64_t tokenRefresh, uint64_t authMaxAge)
+    ATTR_NONNULL((1)) ATTR_NONNULL((2));
 void Authenticator_setDefaultLimit(PSC_RateLimitOpts *limitOpts);
 void Authenticator_registerChecker(
 	const char *name, CredentialsChecker *checker)

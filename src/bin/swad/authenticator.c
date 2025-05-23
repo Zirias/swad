@@ -15,10 +15,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#define COOKIE_NS "swad."
-#define ISS_NS "urn:fdc:sekrit.de:2025:swad:"
-#define TOKEN_LIFETIME 86400U
-
 typedef struct Realm
 {
     const char *name;
@@ -54,6 +50,13 @@ struct User
 static PSC_HashTable *checkers;
 static PSC_HashTable *realms;
 static PSC_RateLimitOpts *defaultLimitOpts;
+static const char *cookiens;
+static const char *issurn;
+static size_t cookienslen;
+static size_t issurnlen;
+static uint64_t tokenlifetime;
+static uint64_t tokenrefresh;
+static uint64_t authmaxage;
 
 static pthread_mutex_t authlock;
 
@@ -73,18 +76,18 @@ static void deleteRealm(void *obj)
 static char *createCookieName(const char *realm)
 {
     size_t realmlen = strlen(realm);
-    char *nm = PSC_malloc(realmlen + sizeof COOKIE_NS);
-    memcpy(nm, COOKIE_NS, sizeof COOKIE_NS - 1);
-    memcpy(nm + sizeof COOKIE_NS - 1, realm, realmlen + 1);
+    char *nm = PSC_malloc(realmlen + cookienslen + 1);
+    memcpy(nm, cookiens, cookienslen);
+    memcpy(nm + cookienslen, realm, realmlen + 1);
     return nm;
 }
 
 static char *createIssuer(const char *checker)
 {
     size_t checkerlen = strlen(checker);
-    char *nm = PSC_malloc(checkerlen + sizeof ISS_NS);
-    memcpy(nm, ISS_NS, sizeof ISS_NS - 1);
-    memcpy(nm + sizeof ISS_NS - 1, checker, checkerlen + 1);
+    char *nm = PSC_malloc(checkerlen + issurnlen + 1);
+    memcpy(nm, issurn, issurnlen);
+    memcpy(nm + issurnlen, checker, checkerlen + 1);
     return nm;
 }
 
@@ -94,13 +97,17 @@ static int verifyToken(Jwt *token, const Realm *realm)
     if (!Jwt_sub(token)) return 0;
     const char *iss = Jwt_iss(token);
     if (!iss) return 0;
-    if (strncmp(iss, ISS_NS, sizeof ISS_NS - 1)) return 0;
+    if (strncmp(iss, issurn, issurnlen)) return 0;
+    time_t now = time(0);
     int64_t exp = Jwt_exp(token);
-    if (time(0) >= exp) return 0;
+    if (now > exp) return 0;
     const PSC_Json *json = Jwt_json(token);
     const PSC_Json *authtime = PSC_Json_property(json, "auth_time", 9);
     if (!authtime) return 0;
-    if (PSC_Json_integer(authtime) < realm->version) return 0;
+    int64_t authts = PSC_Json_integer(authtime);
+    if (authts < realm->version ||
+	    authts + (int64_t)authmaxage < now) return 0;
+    if ((uint64_t)(exp - now) < tokenrefresh) return 2;
     return 1;
 }
 
@@ -111,11 +118,34 @@ static Jwt *getVerifiedToken(Cookies *cookies, const Realm *realm,
     const char *tokenstr = Cookies_getCookie(cookies, cookienm);
     if (!tokenstr) return 0;
     Jwt *token = 0;
-    if (!(token = Jwt_parse(tokenstr)) || !verifyToken(token, realm))
+    int vrfy = 0;
+    if (!(token = Jwt_parse(tokenstr)) || !(vrfy = verifyToken(token, realm)))
     {
 	Cookies_deleteCookie(cookies, cookienm);
 	Jwt_destroy(token);
 	token = 0;
+    }
+    if (vrfy == 2)
+    {
+	Jwt *newtoken = Jwt_create(Jwt_iss(token), Jwt_sub(token),
+		tokenlifetime);
+	time_t now = time(0);
+	const PSC_Json *json = Jwt_json(token);
+	PSC_Json *authtime = PSC_Json_createInteger(
+		PSC_Json_integer(PSC_Json_property(json, "auth_time", 9)));
+	Jwt_set(newtoken, "auth_time", authtime);
+	const PSC_Json *name = PSC_Json_property(json, "name", 4);
+	if (name)
+	{
+	    PSC_Json *newname = PSC_Json_createString(
+		    PSC_Json_string(name), 0);
+	    Jwt_set(newtoken, "name", newname);
+	}
+	char *newtokenstr = Jwt_issue(newtoken, now, JSA_HS256);
+	Cookies_setCookie(cookies, cookienm, newtokenstr, now + tokenlifetime);
+	free(newtokenstr);
+	Jwt_destroy(token);
+	token = newtoken;
     }
     return token;
 }
@@ -209,12 +239,12 @@ AuthResult Authenticator_silentLogin(Authenticator *self)
 		otherRealm, otherCookieNm);
 	free(otherCookieNm);
 	if (!otherToken) continue;
-	const char *checker = Jwt_iss(otherToken) + (sizeof ISS_NS - 1);
+	const char *checker = Jwt_iss(otherToken) + issurnlen;
 	while (PSC_ListIterator_moveNext(j))
 	{
 	    if (strcmp(checker, PSC_ListIterator_current(j))) continue;
 	    self->token = Jwt_create(Jwt_iss(otherToken),
-		    Jwt_sub(otherToken), TOKEN_LIFETIME);
+		    Jwt_sub(otherToken), tokenlifetime);
 	    time_t now = time(0);
 	    PSC_Json *authtime = PSC_Json_createInteger(now);
 	    Jwt_set(self->token, "auth_time", authtime);
@@ -228,7 +258,7 @@ AuthResult Authenticator_silentLogin(Authenticator *self)
 	    }
 	    char *tokenstr = Jwt_issue(self->token, now, JSA_HS256);
 	    Cookies_setCookie(self->cookies, self->cookienm,
-		    tokenstr, now + TOKEN_LIFETIME);
+		    tokenstr, now + tokenlifetime);
 	    free(tokenstr);
 	    self->user = createFromToken(self->token);
 	    result = AR_OK;
@@ -302,7 +332,7 @@ AuthResult Authenticator_login(Authenticator *self,
 		free(self->user);
 		Jwt_destroy(self->token);
 		char *iss = createIssuer(checkerName);
-		self->token = Jwt_create(iss, user, TOKEN_LIFETIME);
+		self->token = Jwt_create(iss, user, tokenlifetime);
 		free(iss);
 		time_t now = time(0);
 		PSC_Json *authtime = PSC_Json_createInteger(now);
@@ -314,7 +344,7 @@ AuthResult Authenticator_login(Authenticator *self,
 		}
 		char *tokenstr = Jwt_issue(self->token, now, JSA_HS256);
 		Cookies_setCookie(self->cookies, self->cookienm,
-			tokenstr, now + TOKEN_LIFETIME);
+			tokenstr, now + tokenlifetime);
 		free(tokenstr);
 		self->user = createFromToken(self->token);
 	    }
@@ -420,12 +450,23 @@ static void initTmpl(const char *tmplPath, const char *nm, const char *realm,
     }
 }
 
-void Authenticator_init(void)
+void Authenticator_init(const char *cookieNs, const char *issUrn,
+	uint64_t tokenLifetime, uint64_t tokenRefresh, uint64_t authMaxAge)
 {
-    checkers = PSC_HashTable_create(4);
-    realms = PSC_HashTable_create(4);
-    pthread_mutex_init(&authlock, 0);
-    Jwt_createHmacKey();
+    cookiens = cookieNs;
+    issurn = issUrn;
+    cookienslen = strlen(cookiens);
+    issurnlen = strlen(issurn);
+    tokenlifetime = tokenLifetime;
+    tokenrefresh = tokenRefresh;
+    authmaxage = authMaxAge;
+    if (!checkers)
+    {
+	checkers = PSC_HashTable_create(4);
+	realms = PSC_HashTable_create(4);
+	pthread_mutex_init(&authlock, 0);
+	Jwt_createHmacKey();
+    }
 }
 
 void Authenticator_setDefaultLimit(PSC_RateLimitOpts *limitOpts)

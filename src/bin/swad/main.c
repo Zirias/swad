@@ -164,6 +164,10 @@ static CredentialsChecker *createPowChecker(const CfgChecker *ccfg)
 
 static void configureAuthenticator(void)
 {
+    Authenticator_init(Config_cookieNs(cfg), Config_issUrn(cfg),
+	    Config_tokenLifetime(cfg), Config_tokenRefresh(cfg),
+	    Config_authMaxAge(cfg));
+
     PSC_RateLimitOpts *limitOpts = 0;
     uint16_t seconds;
     uint16_t limit;
@@ -385,7 +389,6 @@ static void prestartup(void *receiver, void *sender, void *args)
     loginHandler_setRoute(Config_loginRoute(cfg));
     staticHandler_init(Config_resourceDir(cfg));
 
-    Authenticator_init();
     configureAuthenticator();
 
     const CfgServer *s;
