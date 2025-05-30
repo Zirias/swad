@@ -35,6 +35,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef JEMALLOC_DEBUG
+#include <malloc_np.h>
+const char *malloc_conf = "narenas:1,tcache:false,dirty_decay_ms:0,muzzy_decay_ms:0,abort_conf:true";
+#endif
+
 static void serverRemoved(const CfgServer *olds);
 static void realmRemoved(const CfgRealm *oldr);
 
