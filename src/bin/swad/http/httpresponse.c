@@ -279,7 +279,8 @@ static void sendBody(void *receiver, void *sender, void *args)
     }
     if (self->remaining > UINT16_MAX) self->remaining = UINT16_MAX;
 
-    while (PSC_Connection_sendAsync(conn, self->body + self->sendPos,
+    while (self->remaining && PSC_Connection_sendAsync(conn,
+		self->body + self->sendPos,
 		(uint16_t)self->remaining, self) >= 0)
     {
 	self->sendPos += self->remaining;
