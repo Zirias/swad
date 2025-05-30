@@ -266,22 +266,26 @@ static void sendBody(void *receiver, void *sender, void *args)
 
     HttpResponse *self = receiver;
     PSC_Connection *conn = sender;
-    do
+
+    self->remaining = self->bodySize - self->sendPos;
+    if (!self->remaining)
     {
-	if (self->remaining) self->sendPos += self->remaining;
+	PSC_Event_unregister(PSC_Connection_closed(conn), self,
+		abortSending, 0);
+	PSC_Event_unregister(PSC_Connection_dataSent(conn), self,
+		sendBody, 0);
+	PSC_Event_raise(self->sent, 0, conn);
+	return;
+    }
+    if (self->remaining > UINT16_MAX) self->remaining = UINT16_MAX;
+
+    while (PSC_Connection_sendAsync(conn, self->body + self->sendPos,
+		(uint16_t)self->remaining, self) >= 0)
+    {
+	self->sendPos += self->remaining;
 	self->remaining = self->bodySize - self->sendPos;
-	if (!self->remaining)
-	{
-	    PSC_Event_unregister(PSC_Connection_closed(conn), self,
-		    abortSending, 0);
-	    PSC_Event_unregister(PSC_Connection_dataSent(conn), self,
-		    sendBody, 0);
-	    PSC_Event_raise(self->sent, 0, conn);
-	    return;
-	}
 	if (self->remaining > UINT16_MAX) self->remaining = UINT16_MAX;
-    } while (PSC_Connection_sendAsync(conn, self->body + self->sendPos,
-		    (uint16_t)self->remaining, self) >= 0);
+    }
 }
 
 static void abortSending(void *receiver, void *sender, void *args)
