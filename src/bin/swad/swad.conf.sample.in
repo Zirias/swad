@@ -158,7 +158,10 @@
 
 # ============================================================================
 # The following settings are still part of the global section, but configure
-# the thread pool. Swad handles requests on worker threads from this thread
+# service worker threads and the thread pool. When service worker threads are
+# configured, handling of client connections (including decoding of their HTTP
+# requests) is distributed on these, otherwise that's all done on the main
+# thread. The request pipelines are executed on threads from the thread
 # pool. The thread pool will run with a fixed number of worker threads and
 # offer a queue for waiting jobs for the case when no worker thread is
 # currently idle.
@@ -167,34 +170,45 @@
 # fail and swad will return a "429 Too many requests" response.
 #
 # Don't tune up the number of threads too much though, the pool is not
-# designed to scale to huge numbers of threads, e.g. searching for a thread
-# is always done by iterating over all of them.
+# designed to scale to huge numbers of threads.
 
-# How man worker threads to use per CPU/core
+# How many service worker threads to create
+#
+# If this is a positive number, create this many service worker threads.
+# For a negative number, create as many service worker threads as there are
+# CPUs/cores, and only if we can't find out, use the absolute value for the
+# number of service worker threads.
+# Set this to 0 to disable service worker threads.
+#
+# Min: -4096, Max: 4096, Default: -8
+#
+; service_workers = -8
+
+# How man pool threads to use per CPU/core
 #
 # This could be increased for heavy loads or for machines with few cores.
 # When built for a system without POSIX user context switching, so a worker
-# awaiting some "async task" blocks a worker thread, this defaults to 6
+# awaiting some "async task" blocks a worker thread, this defaults to 2
 # threads per CPU/core.
 #
-# Min: 1, Max: 256, Default: 4
+# Min: 1, Max: 256, Default: 1
 #
 ; threads_per_cpu = 1
 
-# How many threads to use if we don't know the number of CPUs/cores
+# How many pool threads to use if we don't know the number of CPUs/cores
 #
 # If for some reason, the number of CPUs/cores of the system can't be
 # determined, use this many worker threads.
-# Min: 1, Max: 4096, Default: 16
+# Min: 1, Max: 4096, Default: 8
 #
-; default_threads = 16
+; default_threads = 8
 
-# Total maximum number of worker threads
+# Total maximum number of pool threads
 #
 # The thread pool will never create more than this number of threads.
-# Min: 1, Max: 4096, Default: 256
+# Min: 1, Max: 4096, Default: 128
 #
-; max_threads = 256
+; max_threads = 128
 
 # How many queue slots to reserve per thread
 #

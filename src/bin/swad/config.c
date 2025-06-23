@@ -24,11 +24,12 @@
 #define DEFCONFFILE	    SYSCONFDIR "/swad.conf"
 #define DEFPIDFILE	    RUNSTATEDIR "/swad.pid"
 #define DEFRESDIR	    SYSCONFDIR "/swad"
-#define DEFNTHREADS	    16
-#define DEFCPUNTHR	    4
-#define DEFMAXTHREADS	    256
-#define DEFCPUNTHRBLOCK	    6
-#define DEFTHRJOBQUEUE	    16
+#define DEFSVCWORKERS	    -8
+#define DEFNTHREADS	    8
+#define DEFCPUNTHR	    1
+#define DEFMAXTHREADS	    128
+#define DEFCPUNTHRBLOCK	    2
+#define DEFTHRJOBQUEUE	    8
 #define DEFMAXJOBQUEUE	    512
 #define DEFCOOKIENS	    "swad."
 #define DEFISSURN	    "urn:x-swad-credchecker:"
@@ -109,6 +110,7 @@ struct Config
     int resolveHostsCfg;
     int foreground;
     int verbose;
+    int serviceWorkers;
     int defaultThreads;
     int threadsPerCpu;
     int maxThreads;
@@ -624,6 +626,12 @@ static void readOption(Config *self, char *lp)
 	if (intArg(&self->threadsPerCpu, value, 1, 256, 10) < 0) goto inval;
 	return;
     }
+    if (!strcmp(key, "service_workers"))
+    {
+	if (intArg(&self->serviceWorkers, value,
+		    -4096, 4096, 10) < 0) goto inval;
+	return;
+    }
     if (!strcmp(key, "default_threads"))
     {
 	if (intArg(&self->defaultThreads, value, 1, 4096, 10) < 0) goto inval;
@@ -916,6 +924,7 @@ Config *Config_create(int argc, char **argv)
     self->uid = -1;
     self->gid = -1;
     self->resolveHosts = -1;
+    self->serviceWorkers = DEFSVCWORKERS;
     self->logLevel = -1;
 
     server = getServer(self, 0);
@@ -1265,6 +1274,11 @@ uint64_t Config_authMaxAge(const Config *self)
 {
     if (!self->authMaxAge) return DEFAUTHMAXAGE;
     return self->authMaxAge;
+}
+
+int Config_serviceWorkers(const Config *self)
+{
+    return self->serviceWorkers;
 }
 
 int Config_defaultThreads(const Config *self)

@@ -81,6 +81,7 @@ const char *Config_issUrn(const Config *self) CMETHOD ATTR_RETNONNULL;
 uint64_t Config_tokenLifetime(const Config *self) CMETHOD;
 uint64_t Config_tokenRefresh(const Config *self) CMETHOD;
 uint64_t Config_authMaxAge(const Config *self) CMETHOD;
+int Config_serviceWorkers(const Config *self) CMETHOD;
 int Config_defaultThreads(const Config *self) CMETHOD;
 int Config_threadsPerCpu(const Config *self) CMETHOD;
 int Config_maxThreads(const Config *self) CMETHOD;

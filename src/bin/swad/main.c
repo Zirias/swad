@@ -454,7 +454,7 @@ int main(int argc, char **argv)
     PSC_RunOpts_enableDefaultLogging("swad");
     PSC_RunOpts_runas(Config_uid(cfg), Config_gid(cfg));
     if (Config_foreground(cfg)) PSC_RunOpts_foreground();
-    PSC_RunOpts_workerThreads(-8);
+    PSC_RunOpts_workerThreads(Config_serviceWorkers(cfg));
     PSC_Event_register(PSC_Service_prestartup(), 0, prestartup, 0);
     PSC_Event_register(PSC_Service_shutdown(), 0, shutdown, 0);
 
