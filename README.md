@@ -28,6 +28,7 @@ basically the same thing also known from `Anubis`, see
 
 * Small and efficient C code base with almost no external dependencies
 * Reactor pattern with an attached thread pool to run the request pipelines
+* Option to enable additional reactor (event-handling) threads
 * Support for `kqueue` (on BSD systems), `epoll` (on Linux) and `event ports`
   (on Solaris/Illumos) for obtaining events from the system, with fallback to
   `select` or, as a build option, `poll`, for POSIX portability. `kqueue` is
@@ -236,6 +237,13 @@ Secret = pam_swad
 
 Here are some tips how to configure swad for operation under heavy load:
 
+* Consider disabling TLS. As unfortunate as it is, TLS reduces the throughput
+  still possible with acceptable service quality by at least factor 10. Be
+  aware that without TLS, credentials and tokens won't be encrypted between
+  your reverse proxy and swad, so only do this if you can reliably prevent
+  eavesdropping by other means, like e.g. a loopback connection on a trusted
+  host or some encrypted tunnel.
+
 * **Don't** enable the `resolve_hosts` option. Resolving won't directly stall
   the service because it is done on thread jobs, but if you have a very high
   rate of incoming requests, these thread jobs could still completely saturate
@@ -243,11 +251,11 @@ Here are some tips how to configure swad for operation under heavy load:
 
 * Bump up `threads_per_cpu` for more worker threads, to allow processing more
   requests in parallel.
-  Default is `4`.
+  Default is `1`.
 
 * Bump up `job_queue_per_thread` to allow more thread jobs to wait for an
   available worker thread (helping with sudden request bursts).
-  Default is `16`.
+  Default is `8`.
 
 * You might also consider setting `log_level` to `error` to further decrease
   usage of the thread pool, but then you won't get any request logging any
@@ -294,6 +302,12 @@ The following build options are available:
 * `BUNDLED_POSER` (bool): Uses the bundled poser lib and links it statically.
   When disabled, poser must be installed and will be linked as a shared
   library.
+
+  Default: `on`.
+
+* `WITH_POSER_ATOMICS` (bool, only for `BUNDLED_POSER=on`): When atomics are
+  available, use them for some lock-free alternatives to code that would
+  otherwise use mutexes for thread synchronization.
 
   Default: `on`.
 
