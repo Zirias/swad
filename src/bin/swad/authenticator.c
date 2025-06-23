@@ -4,11 +4,12 @@
 
 #include "jwt.h"
 #include "middleware/cookies.h"
+#include "proxylist.h"
 #include "tmpl.h"
 
 #include <fcntl.h>
 #include <poser/core.h>
-#include <pthread.h>
+#include <semaphore.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -58,7 +59,24 @@ static uint64_t tokenlifetime;
 static uint64_t tokenrefresh;
 static uint64_t authmaxage;
 
-static pthread_mutex_t authlock;
+static sem_t authlock;
+static sem_t authrlock;
+static int authreaders;
+
+#define authrenter() do { \
+    sem_wait(&authrlock); \
+    if (!authreaders++) sem_wait(&authlock); \
+    sem_post(&authrlock); \
+} while (0)
+
+#define authrleave() do { \
+    sem_wait(&authrlock); \
+    if (!--authreaders) sem_post(&authlock); \
+    sem_post(&authrlock); \
+} while (0)
+
+#define authwenter() sem_wait(&authlock)
+#define authwleave() sem_post(&authlock)
 
 static void deleteRealm(void *obj)
 {
@@ -166,9 +184,9 @@ Authenticator *Authenticator_create(HttpContext *context, const char *realm)
     Authenticator *self = PSC_malloc(sizeof *self);
     self->context = context;
     self->realmnm = realm ? realm : DEFAULT_REALM;
-    pthread_mutex_lock(&authlock);
+    authrenter();
     self->realm = PSC_HashTable_get(realms, self->realmnm);
-    pthread_mutex_unlock(&authlock);
+    authrleave();
     self->cookies = Cookies_get(context);
     self->cookienm = createCookieName(realm);
     self->token = getVerifiedToken(self->cookies, self->realm, self->cookienm);
@@ -190,28 +208,28 @@ const char *Authenticator_realm(const Authenticator *self)
 const uint8_t *Authenticator_loginTmpl(const Authenticator *self, size_t *sz)
 {
     const uint8_t *tmpl = tmpl_login_html;
-    pthread_mutex_lock(&authlock);
+    authrenter();
     if (self->realm && self->realm->t_login)
     {
 	*sz = self->realm->t_login_sz;
 	tmpl = self->realm->t_login;
     }
     else *sz = tmpl_login_html_sz;
-    pthread_mutex_unlock(&authlock);
+    authrleave();
     return tmpl;
 }
 
 const uint8_t *Authenticator_logoutTmpl(const Authenticator *self, size_t *sz)
 {
     const uint8_t *tmpl = tmpl_logout_html;
-    pthread_mutex_lock(&authlock);
+    authrenter();
     if (self->realm && self->realm->t_logout)
     {
 	*sz = self->realm->t_logout_sz;
 	tmpl = self->realm->t_logout;
     }
     else *sz = tmpl_logout_html_sz;
-    pthread_mutex_unlock(&authlock);
+    authrleave();
     return tmpl;
 }
 
@@ -225,7 +243,7 @@ AuthResult Authenticator_silentLogin(Authenticator *self)
     if (self->user) return AR_OK;
     AuthResult result = AR_FAILED;
     if (!self->realm || !PSC_List_size(self->realm->checkers)) return result;
-    pthread_mutex_lock(&authlock);
+    authrenter();
     PSC_HashTableIterator *i = 0;
     PSC_ListIterator *j = 0;
     j = PSC_List_iterator(self->realm->checkers);
@@ -268,7 +286,7 @@ AuthResult Authenticator_silentLogin(Authenticator *self)
     }
     PSC_HashTableIterator_destroy(i);
     PSC_ListIterator_destroy(j);
-    pthread_mutex_unlock(&authlock);
+    authrleave();
     return result;
 }
 
@@ -281,7 +299,7 @@ static PSC_RateLimit *getLimits(Authenticator *self)
 	{
 	    if (!defaultLimitOpts)
 	    {
-		defaultLimitOpts = PSC_RateLimitOpts_create(0);
+		defaultLimitOpts = PSC_RateLimitOpts_create();
 		PSC_RateLimitOpts_addLimit(defaultLimitOpts, 15 * 60, 5);
 	    }
 	    limitOpts = defaultLimitOpts;
@@ -291,31 +309,49 @@ static PSC_RateLimit *getLimits(Authenticator *self)
     return self->realm->failLimit;
 }
 
+static void *getLimitKey(size_t *sz, HttpContext *ctx, const char *user)
+{
+    const PSC_IpAddr *addr = 0;
+    size_t addrlen = 0;
+    RemoteEntry *e = PSC_List_at(ProxyList_get(ctx),
+	    ProxyList_firstTrusted(ctx));
+    if (e)
+    {
+	addr = RemoteEntry_addr(e);
+	addrlen = PSC_IpAddr_rawLen(addr);
+    }
+    size_t userlen = strlen(user);
+    *sz = userlen + addrlen + !!addrlen;
+    char *key = PSC_malloc(*sz);
+    memcpy(key, user, userlen + !!addrlen);
+    if (addr) memcpy(key + userlen + 1, PSC_IpAddr_raw(addr), addrlen);
+    return key;
+}
+
 AuthResult Authenticator_login(Authenticator *self,
 	const char *user, const char *pw)
 {
     AuthResult result = AR_FAILED;
     if (!self->realm || !PSC_List_size(self->realm->checkers)) return result;
-    size_t userLen = strlen(user);
-    size_t realmLen = strlen(self->realmnm);
-    size_t rateKeyLen = userLen + realmLen + 1;
-    char *rateKey = PSC_malloc(rateKeyLen);
-    memcpy(rateKey, user, userLen);
-    rateKey[userLen] = 0;
-    memcpy(rateKey+userLen+1, self->realmnm, realmLen);
-    pthread_mutex_lock(&authlock);
+    authrenter();
     self->deviate = 0;
-    if (self->realm->blocks &&
-	    PSC_Dictionary_get(self->realm->blocks, rateKey, rateKeyLen))
+    void *limitKey = 0;
+    size_t limitKeySz = 0;
+    if (self->realm->blocks)
     {
-	if (PSC_RateLimit_check(getLimits(self), rateKey, rateKeyLen))
+	limitKey = getLimitKey(&limitKeySz, self->context, user);
+	if (PSC_Dictionary_get(self->realm->blocks, limitKey, limitKeySz))
 	{
-	    PSC_Dictionary_set(self->realm->blocks, rateKey, rateKeyLen, 0, 0);
-	}
-	else
-	{
-	    result = AR_BLOCKED;
-	    goto done;
+	    if (PSC_RateLimit_check(getLimits(self), limitKey, limitKeySz))
+	    {
+		PSC_Dictionary_set(self->realm->blocks, limitKey, limitKeySz,
+			0, 0);
+	    }
+	    else
+	    {
+		result = AR_BLOCKED;
+		goto done;
+	    }
 	}
     }
     PSC_ListIterator *i = PSC_List_iterator(self->realm->checkers);
@@ -358,22 +394,24 @@ AuthResult Authenticator_login(Authenticator *self,
 
     if (result == AR_FAILED)
     {
-	if (!PSC_RateLimit_check(getLimits(self), rateKey, rateKeyLen))
+	if (!limitKey) limitKey = getLimitKey(&limitKeySz,
+		self->context, user);
+	if (!PSC_RateLimit_check(getLimits(self), limitKey, limitKeySz))
 	{
 	    result = AR_BLOCKED;
 	    if (!self->realm->blocks)
 	    {
-		self->realm->blocks = PSC_Dictionary_create(PSC_DICT_NODELETE);
+		self->realm->blocks = PSC_Dictionary_create(
+			PSC_DICT_NODELETE, 1);
 	    }
-	    PSC_Dictionary_set(self->realm->blocks, rateKey, rateKeyLen,
+	    PSC_Dictionary_set(self->realm->blocks, limitKey, limitKeySz,
 		    (void *)1, 0);
 	}
     }
 
 done:
-    pthread_mutex_unlock(&authlock);
-    free(rateKey);
-
+    authrleave();
+    free(limitKey);
     return result;
 }
 
@@ -464,14 +502,15 @@ void Authenticator_init(const char *cookieNs, const char *issUrn,
     {
 	checkers = PSC_HashTable_create(4);
 	realms = PSC_HashTable_create(4);
-	pthread_mutex_init(&authlock, 0);
+	sem_init(&authlock, 0, 1);
+	sem_init(&authrlock, 0, 1);
+	authreaders = 0;
 	Jwt_createHmacKey();
     }
 }
 
 void Authenticator_setDefaultLimit(PSC_RateLimitOpts *limitOpts)
 {
-    pthread_mutex_lock(&authlock);
     if ((!defaultLimitOpts && !limitOpts) ||
 	    (defaultLimitOpts && limitOpts &&
 	     PSC_RateLimitOpts_equals(defaultLimitOpts, limitOpts)))
@@ -496,7 +535,6 @@ void Authenticator_setDefaultLimit(PSC_RateLimitOpts *limitOpts)
 	}
 	PSC_HashTableIterator_destroy(i);
     }
-    pthread_mutex_unlock(&authlock);
 }
 
 void Authenticator_registerChecker(
@@ -508,7 +546,6 @@ void Authenticator_registerChecker(
 void Authenticator_registerRealm(const char *name, const char *tmplPath,
 	PSC_List *checkerNames, PSC_RateLimitOpts *limitOpts)
 {
-    pthread_mutex_lock(&authlock);
     Realm *realm = PSC_HashTable_get(realms, name);
     if (realm)
     {
@@ -564,12 +601,11 @@ void Authenticator_registerRealm(const char *name, const char *tmplPath,
     }
     initTmpl(tmplPath, "login", name, &realm->t_login, &realm->t_login_sz);
     initTmpl(tmplPath, "logout", name, &realm->t_logout, &realm->t_logout_sz);
-    pthread_mutex_unlock(&authlock);
 }
 
 void Authenticator_lockAndClear(void)
 {
-    pthread_mutex_lock(&authlock);
+    authwenter();
     PSC_HashTable_destroy(checkers);
     checkers = PSC_HashTable_create(4);
 }
@@ -581,12 +617,13 @@ void Authenticator_removeRealm(const char *name)
 
 void Authenticator_unlock(void)
 {
-    pthread_mutex_unlock(&authlock);
+    authwleave();
 }
 
 void Authenticator_done(void)
 {
-    pthread_mutex_destroy(&authlock);
+    sem_destroy(&authrlock);
+    sem_destroy(&authlock);
     PSC_HashTable_destroy(realms);
     PSC_HashTable_destroy(checkers);
     PSC_RateLimitOpts_destroy(defaultLimitOpts);

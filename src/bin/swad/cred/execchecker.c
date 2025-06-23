@@ -20,6 +20,7 @@ typedef struct ExecLoginRequest
 {
     ExecChecker *checker;
     PSC_AsyncTask *task;
+    PSC_ProcessOpts *opts;
     PSC_Process *process;
     PSC_Connection *procStdout;
     PSC_Connection *procStderr;
@@ -58,7 +59,7 @@ static void processDone(void *receiver, void *sender, void *args)
     req->process = 0;
     if (!req->procStdout && !req->procStderr)
     {
-	PSC_Timer_stop(req->timeout);
+	PSC_Timer_destroy(req->timeout);
 	PSC_AsyncTask_complete(req->task, 0);
     }
 }
@@ -75,7 +76,7 @@ static void streamClosed(void *receiver, void *sender, void *args)
 
     if (!req->procStdout && !req->procStderr && !req->process)
     {
-	PSC_Timer_stop(req->timeout);
+	PSC_Timer_destroy(req->timeout);
 	PSC_AsyncTask_complete(req->task, 0);
     }
 }
@@ -157,6 +158,7 @@ static void execTimeout(void *receiver, void *sender, void *args)
 	    "considering login failed.",
 	    req->checker->path, req->checker->timeout);
 
+    PSC_Timer_destroy(req->timeout);
     PSC_AsyncTask_complete(req->task, 0);
 }
 
@@ -197,7 +199,19 @@ static void setProcStream(void *obj,
 static void checkAsync(PSC_AsyncTask *task)
 {
     ExecLoginRequest *req = PSC_AsyncTask_arg(task);
+    req->timeout = PSC_Timer_create();
+    if (!req->timeout)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "execchecker: cannot create timer for "
+		"authentication timeout, giving up");
+	PSC_ProcessOpts_destroy(req->opts);
+	PSC_AsyncTask_complete(task, 0);
+	return;
+    }
+    PSC_Timer_setMs(req->timeout, req->checker->timeout);
     PSC_Event_register(PSC_Timer_expired(req->timeout), req, execTimeout, 0);
+    req->process = PSC_Process_create(req->opts);
+    PSC_ProcessOpts_destroy(req->opts);
     PSC_Event_register(PSC_Process_done(req->process), req, processDone, 0);
     PSC_Process_exec(req->process, req, setProcStream, req->checker->path);
 }
@@ -219,17 +233,15 @@ static AuthResult check(void *obj, const char *user, const char *pw,
     ExecLoginRequest *req = PSC_malloc(sizeof *req);
     req->checker = self;
     req->task = PSC_AsyncTask_create(checkAsync);
-    req->process = PSC_Process_create(opts);
+    req->opts = opts;
+    req->process = 0;
     req->procStdout = 0;
     req->procStderr = 0;
-    req->timeout = PSC_Timer_create();
+    req->timeout = 0;
     req->pw = pw;
     req->realname = 0;
     req->ok = 0;
 
-    PSC_ProcessOpts_destroy(opts);
-
-    PSC_Timer_setMs(req->timeout, self->timeout);
     PSC_AsyncTask_await(req->task, req);
 
     int ok = req->ok;
@@ -238,7 +250,6 @@ static AuthResult check(void *obj, const char *user, const char *pw,
 	if (ok) *realname = req->realname;
 	else free(req->realname);
     }
-    PSC_Timer_destroy(req->timeout);
     free(req);
     return ok ? AR_OK : AR_FAILED;
 }

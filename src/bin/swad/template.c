@@ -56,7 +56,7 @@ Template *Template_create(const uint8_t *tmpl, size_t tmplSize)
     self->size = tmplSize;
     self->tmpl = PSC_malloc(tmplSize);
     memcpy(self->tmpl, tmpl, tmplSize);
-    self->vars = PSC_Dictionary_create(deleteVar);
+    self->vars = PSC_Dictionary_create(deleteVar, 0);
     self->owned = 1;
     return self;
 }
@@ -72,7 +72,7 @@ Template *Template_createStatic(const uint8_t *tmpl, size_t tmplSize)
     memset(self, 0, sizeof *self);
     self->size = tmplSize;
     self->stmpl = tmpl;
-    self->vars = PSC_Dictionary_create(deleteVar);
+    self->vars = PSC_Dictionary_create(deleteVar, 0);
     return self;
 }
 

@@ -47,7 +47,7 @@ HttpContext *HttpContext_create(HttpRequest *request, HttpHandler handler,
     if (conn)
     {
 	const PSC_IpAddr *remoteIpAddr = PSC_Connection_remoteIpAddr(conn);
-	if (remoteIpAddr) self->remoteIpAddr = PSC_IpAddr_clone(remoteIpAddr);
+	if (remoteIpAddr) self->remoteIpAddr = PSC_IpAddr_ref(remoteIpAddr);
 	else self->remoteAddr = PSC_copystr(PSC_Connection_remoteAddr(conn));
 	PSC_Event_register(PSC_Connection_closed(conn), self,
 		connectionClosed, 0);

@@ -102,7 +102,18 @@ static void pipelineJobDone(void *receiver, void *sender, void *args);
 static void pipelineCanceledJobDone(void *receiver, void *sender, void *args);
 static void pipelineJobCanceled(void *receiver, void *sender, void *args);
 static void requestReceived(void *receiver, void *sender, void *args);
-static void tcpClientConnected(void *receiver, void *sender, void *args);
+static void tcpClientConnected(void *receiver, PSC_Connection *client);
+static void dodestroy(void *receiver);
+
+static void logAbort(HttpContext *context)
+{
+    LogRecord *record = HttpContext_get(context, CTXLOGKEY);
+    if (!record) return;
+    PSC_Resolver_destroy(record->resolver);
+    free(record->path);
+    free(record->method);
+    free(record);
+}
 
 static void logAndDelete(LogRecord *record)
 {
@@ -212,21 +223,19 @@ static void createLogRecord(HttpServer *self, HttpContext *context)
 	{
 	    const RemoteEntry *remote = PSC_List_at(remotes, i);
 	    const PSC_IpAddr *addr = RemoteEntry_addr(remote);
+	    PSC_IpAddr *ipv4 = 0;
 	    const char *addrStr = "<Unknown>";
 	    if (self->nat64Prefix)
 	    {
 		const PSC_IpAddr *prefixes[] = { self->nat64Prefix, 0 };
-		PSC_IpAddr *ipv4 = PSC_IpAddr_tov4(addr, prefixes);
-		if (ipv4)
-		{
-		    addrStr = PSC_IpAddr_string(ipv4);
-		    PSC_IpAddr_destroy(ipv4);
-		}
+		ipv4 = PSC_IpAddr_tov4(addr, prefixes);
+		if (ipv4) addrStr = PSC_IpAddr_string(ipv4);
 		else addrStr = PSC_IpAddr_string(addr);
 	    }
 	    int rc = snprintf(record->raddr + raddr_pos,
 		    sizeof record->raddr - raddr_pos,
 		    i < nremotes - 1 ? "%s, " : "%s", addrStr);
+	    PSC_IpAddr_destroy(ipv4);
 	    if (rc < 0) break;
 	    raddr_pos += rc;
 	    if (raddr_pos >= sizeof record->raddr - 1)
@@ -244,13 +253,20 @@ static void createLogRecord(HttpServer *self, HttpContext *context)
 
 static ConnectionContext *createContext(HttpServer *self, PSC_Connection *conn)
 {
+    PSC_Timer *timer = PSC_Timer_create();
+    if (!timer)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "httpserver: cannot create connection idle "
+		"timer, giving up");
+	return 0;
+    }
+    PSC_Timer_setMs(timer, self->connTimeout * 1000U);
+    PSC_Timer_start(timer, 0);
+    PSC_Event_register(PSC_Timer_expired(timer), conn, connTimeout, 0);
     ConnectionContext *ctx = PSC_malloc(sizeof *ctx);
     ctx->server = self;
-    ctx->timer = PSC_Timer_create();
+    ctx->timer = timer;
     ctx->job = 0;
-    PSC_Timer_setMs(ctx->timer, self->connTimeout * 1000U);
-    PSC_Timer_start(ctx->timer, 0);
-    PSC_Event_register(PSC_Timer_expired(ctx->timer), conn, connTimeout, 0);
     return ctx;
 }
 
@@ -356,6 +372,8 @@ static void pipelineJobDone(void *receiver, void *sender, void *args)
     PSC_ThreadJob *job = sender;
     HttpContext *context = args;
     PSC_Connection *conn = HttpContext_connection(context);
+    PSC_Event_unregister(PSC_Connection_closed(conn), self,
+	    pipelineJobCanceled, 0);
     ConnectionContext *ctx = PSC_Connection_data(conn);
     PSC_Timer_start(ctx->timer, 0);
 
@@ -363,8 +381,6 @@ static void pipelineJobDone(void *receiver, void *sender, void *args)
 
     if (job)
     {
-	PSC_Event_unregister(PSC_Connection_closed(conn), self,
-		pipelineJobCanceled, 0);
 	if (!PSC_ThreadJob_hasCompleted(job))
 	{
 	    HttpContext_setResponse(context, HttpResponse_createError(
@@ -413,6 +429,7 @@ static void pipelineCanceledJobDone(void *receiver, void *sender, void *args)
     (void)sender;
 
     HttpContext *context = args;
+    logAbort(context);
     HttpRequest_deleteLater(HttpContext_request(context));
     HttpResponse_destroy(HttpContext_response(context));
     HttpContext_destroy(context);
@@ -494,7 +511,7 @@ done:
     {
 	ConnectionContext *ctx = PSC_Connection_data(conn);
 	ctx->job = PSC_ThreadJob_create(
-		pipelineJob, context, self->reqTimeout * 2U);
+		pipelineJob, context, self->reqTimeout * 1000U);
 	PSC_Event_register(PSC_ThreadJob_finished(ctx->job), self,
 		pipelineJobDone, 0);
 	PSC_Event_register(PSC_Connection_closed(conn), self,
@@ -520,12 +537,16 @@ done:
     }
 }
 
-static void tcpClientConnected(void *receiver, void *sender, void *args)
+static void tcpClientConnected(void *receiver, PSC_Connection *client)
 {
-    (void)sender;
-
     HttpServer *self = receiver;
-    PSC_Connection *client = args;
+
+    ConnectionContext *ctx = createContext(self, client);
+    if (!ctx)
+    {
+	PSC_Connection_close(client, 0);
+	return;
+    }
 
     PSC_Log_fmt(PSC_L_DEBUG, "http: TCP client connected from %s",
 	    PSC_Connection_remoteAddr(client));
@@ -533,8 +554,7 @@ static void tcpClientConnected(void *receiver, void *sender, void *args)
 	    self, connActive, 0);
     PSC_Event_register(PSC_Connection_dataSent(client), self, connActive, 0);
     PSC_Event_register(PSC_Connection_closed(client), self, connClosed, 0);
-    PSC_Connection_setData(client,
-	    createContext(self, client), destroyContext);
+    PSC_Connection_setData(client, ctx, destroyContext);
     HttpRequest *req = HttpRequest_create(client);
     PSC_Event_register(HttpRequest_received(req), self, requestReceived, 0);
 }
@@ -610,11 +630,13 @@ void HttpServerOpts_destroy(HttpServerOpts *self)
 
 HttpServer *HttpServer_create(const HttpServerOpts *opts)
 {
-    PSC_Server *server = PSC_Server_createTcp(opts->serverOpts);
-    if (!server) return 0;
-
     HttpServer *self = PSC_malloc(sizeof *self);
-    self->server = server;
+    if (!(self->server = PSC_Server_createTcp(opts->serverOpts,
+		    self, tcpClientConnected, dodestroy)))
+    {
+	free(self);
+	return 0;
+    }
     self->routes = PSC_malloc(ROUTESCHUNK * sizeof *self->routes);
     self->middlewares = PSC_malloc(
 	    MIDDLEWARESCHUNK * sizeof *self->middlewares);
@@ -628,10 +650,6 @@ HttpServer *HttpServer_create(const HttpServerOpts *opts)
     self->resolveHosts = opts->resolveHosts;
     self->connTimeout = opts->connTimeout;
     self->reqTimeout = opts->reqTimeout;
-
-    PSC_Event_register(PSC_Server_clientConnected(server), self,
-	    tcpClientConnected, 0);
-
     return self;
 }
 
@@ -695,12 +713,14 @@ void HttpServer_setLogLevelCallback(HttpServer *self, LogLevelCallback cb)
     self->loglevel = cb;
 }
 
-static void dodestroy(void *receiver, void *sender, void *args)
+static void dodestroy(void *receiver)
 {
-    (void)sender;
-    (void)args;
-
-    HttpServer_destroy(receiver);
+    HttpServer *self = receiver;
+    if (self->server)
+    {
+	self->server = 0;
+	HttpServer_destroy(self);
+    }
 }
 
 void HttpServer_shutdown(HttpServer *self)
@@ -711,15 +731,15 @@ void HttpServer_shutdown(HttpServer *self)
 	HttpServer_destroy(self);
 	return;
     }
-    PSC_Event_register(PSC_Server_shutdownComplete(self->server), self,
-	    dodestroy, 0);
     PSC_Server_shutdown(self->server, 0);
 }
 
 void HttpServer_destroy(HttpServer *self)
 {
     if (!self) return;
-    PSC_Server_destroy(self->server);
+    PSC_Server *server = self->server;
+    self->server = 0;
+    if (server) PSC_Server_destroy(server);
     free(self->middlewares);
     free(self->routes);
     free(self);

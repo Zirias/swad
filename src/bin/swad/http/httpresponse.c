@@ -144,7 +144,7 @@ HttpResponse *HttpResponse_create(HttpStatus status, MediaType bodyType)
     self->headers = HeaderSet_create();
     self->body = 0;
     self->headerBuf = 0;
-    self->sent = PSC_Event_create(self);
+    self->sent = 0;
     self->status = status;
     self->version = HTTP_1_1;
     self->deleteScheduled = 0;
@@ -274,7 +274,7 @@ static void sendBody(void *receiver, void *sender, void *args)
 		abortSending, 0);
 	PSC_Event_unregister(PSC_Connection_dataSent(conn), self,
 		sendBody, 0);
-	PSC_Event_raise(self->sent, 0, conn);
+	if (self->sent) PSC_Event_raise(self->sent, 0, conn);
 	return;
     }
     if (self->remaining > UINT16_MAX) self->remaining = UINT16_MAX;
@@ -300,7 +300,7 @@ static void abortSending(void *receiver, void *sender, void *args)
     self->remaining = 0;
     PSC_Event_unregister(PSC_Connection_closed(conn), self, abortSending, 0);
     PSC_Event_unregister(PSC_Connection_dataSent(conn), self, sendBody, 0);
-    PSC_Event_raise(self->sent, 0, 0);
+    if (self->sent) PSC_Event_raise(self->sent, 0, 0);
 }
 
 int HttpResponse_send(HttpResponse *self, PSC_Connection *conn)
@@ -377,6 +377,7 @@ static void deleteResponse(void *receiver, void *sender, void *args)
 
 PSC_Event *HttpResponse_sent(HttpResponse *self)
 {
+    if (!self->sent) self->sent = PSC_Event_create(self);
     return self->sent;
 }
 

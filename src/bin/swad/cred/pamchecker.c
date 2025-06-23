@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <poser/core.h>
 #include <pwd.h>
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,7 +27,7 @@ typedef struct PamLoginRequest
 } PamLoginRequest;
 
 static pthread_mutex_t pamLock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t authLock = PTHREAD_MUTEX_INITIALIZER;
+static sem_t authLock;
 static PSC_Process *pamProcess;
 static PSC_Connection *pamStdin;
 static PSC_Connection *pamStdout;
@@ -55,6 +56,7 @@ static void pamStdoutReceived(void *receiver, void *sender, void *args)
 	    ATTR_FALLTHROUGH;
 
 	default:
+	    PSC_Connection_pause(pamStdin);
 	    PSC_Connection_pause(pamStdout);
 	    PSC_AsyncTask_complete(currentTask, 0);
 	    currentTask = 0;
@@ -97,6 +99,7 @@ static void pamHelperDone(void *receiver, void *sender, void *args)
 	shutdown = 0;
 	PSC_Service_shutdownUnlock();
     }
+    sem_destroy(&authLock);
     pthread_mutex_unlock(&pamLock);
 }
 
@@ -106,11 +109,7 @@ static void pipeClosed(void *receiver, void *sender, void *args)
     (void)args;
 
     PSC_Connection *conn = sender;
-    if (conn == pamStdin)
-    {
-	if (pamStdout) PSC_Connection_resume(pamStdout);
-	pamStdin = 0;
-    }
+    if (conn == pamStdin) pamStdin = 0;
     else if (conn == pamStdout) pamStdout = 0;
 }
 
@@ -128,6 +127,7 @@ static void shutdownPamProcess(void *receiver, void *sender, void *args)
     }
     shutdown = 1;
     PSC_Service_shutdownLock();
+    PSC_Connection_resume(pamStdin);
     PSC_Connection_resume(pamStdout);
     PSC_Connection_close(pamStdin, 0);
     pthread_mutex_unlock(&pamLock);
@@ -142,14 +142,13 @@ static void setPamStream(void *obj,
     if (stream == PSC_ST_STDIN)
     {
 	pamStdin = conn;
+	PSC_Connection_pause(pamStdin);
 	if (pamStdout) goto startupComplete;
     }
     else if (stream == PSC_ST_STDOUT)
     {
 	pamStdout = conn;
 	PSC_Connection_receiveLine(pamStdout);
-	PSC_Event_register(PSC_Connection_dataReceived(pamStdout), 0,
-		pamStdoutReceived, 0);
 	PSC_Connection_pause(pamStdout);
 	if (pamStdin) goto startupComplete;
     }
@@ -180,6 +179,7 @@ static void createProcess(void)
     PSC_ProcessOpts_destroy(opts);
     PSC_Event_register(PSC_Process_done(pamProcess), 0, pamHelperDone, 0);
     PSC_Process_exec(pamProcess, 0, setPamStream, LIBEXECDIR "/swad_pam");
+    sem_init(&authLock, 0, 1);
 }
 
 static void destroyChecker(void *obj)
@@ -200,7 +200,10 @@ static void checkAsync(PSC_AsyncTask *task)
 	return;
     }
     currentTask = task;
+    PSC_Connection_resume(pamStdin);
     PSC_Connection_resume(pamStdout);
+    PSC_Event_register(PSC_Connection_dataReceived(pamStdout), 0,
+	    pamStdoutReceived, 0);
     PSC_Connection_sendTextAsync(pamStdin, req.qualifiedUser, 0);
 }
 
@@ -211,7 +214,6 @@ static AuthResult check(void *obj, const char *user, const char *pw,
 
     *realname = 0;
     PamChecker *self = obj;
-    pthread_mutex_lock(&authLock);
     pthread_mutex_lock(&pamLock);
     if (!pamProcess)
     {
@@ -223,6 +225,7 @@ static AuthResult check(void *obj, const char *user, const char *pw,
     }
     pthread_mutex_unlock(&pamLock);
 
+    sem_wait(&authLock);
     req.ok = 0;
     req.pw = pw;
     snprintf(req.qualifiedUser, sizeof req.qualifiedUser, "%s:%s\n",
@@ -231,7 +234,7 @@ static AuthResult check(void *obj, const char *user, const char *pw,
     PSC_AsyncTask *task = PSC_AsyncTask_create(checkAsync);
     PSC_AsyncTask_await(task, 0);
     int ok = req.ok;
-    pthread_mutex_unlock(&authLock);
+    sem_post(&authLock);
 
     if (ok)
     {

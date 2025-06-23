@@ -1349,6 +1349,8 @@ void Config_destroy(Config *self)
     }
     free(self->servers);
     free(self->cfg_pidfile);
+    free(self->cookieNs);
+    free(self->issUrn);
     free(self->resourceDir);
     free(self->staticRoute);
     free(self->loginRoute);

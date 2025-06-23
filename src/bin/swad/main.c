@@ -178,7 +178,7 @@ static void configureAuthenticator(void)
     uint16_t limit;
     for (size_t i = 0; Config_loginFailLimit(cfg, i, &seconds, &limit); ++i)
     {
-	if (!limitOpts) limitOpts = PSC_RateLimitOpts_create(0);
+	if (!limitOpts) limitOpts = PSC_RateLimitOpts_create();
 	PSC_RateLimitOpts_addLimit(limitOpts, seconds, limit);
     }
     Authenticator_setDefaultLimit(limitOpts);
@@ -273,7 +273,7 @@ static void configureAuthenticator(void)
 	for (size_t j = 0;
 		CfgRealm_loginFailLimit(r, j, &seconds, &limit); ++j)
 	{
-	    if (!limitOpts) limitOpts = PSC_RateLimitOpts_create(0);
+	    if (!limitOpts) limitOpts = PSC_RateLimitOpts_create();
 	    PSC_RateLimitOpts_addLimit(limitOpts, seconds, limit);
 	}
 	Authenticator_registerRealm(CfgRealm_name(r),
@@ -435,10 +435,6 @@ static void shutdown(void *receiver, void *sender, void *args)
 
     PSC_HashTable_destroy(servers);
     servers = 0;
-
-    staticHandler_done();
-    Authenticator_done();
-    Config_destroy(cfg);
 }
 
 int main(int argc, char **argv)
@@ -458,9 +454,16 @@ int main(int argc, char **argv)
     PSC_RunOpts_enableDefaultLogging("swad");
     PSC_RunOpts_runas(Config_uid(cfg), Config_gid(cfg));
     if (Config_foreground(cfg)) PSC_RunOpts_foreground();
-    PSC_RunOpts_workerThreads(-4);
+    PSC_RunOpts_workerThreads(-8);
     PSC_Event_register(PSC_Service_prestartup(), 0, prestartup, 0);
     PSC_Event_register(PSC_Service_shutdown(), 0, shutdown, 0);
-    return PSC_Service_run();
+
+    int rc = PSC_Service_run();
+
+    staticHandler_done();
+    Authenticator_done();
+    Config_destroy(cfg);
+
+    return rc;
 }
 
