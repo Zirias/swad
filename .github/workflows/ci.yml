@@ -23,7 +23,9 @@ jobs:
       with:
         submodules: recursive
     - name: build-depends
-      run: sudo apt-get -y install ${CI_DEPS}
+      run: |
+        sudo apt-get -y update
+        sudo apt-get -y install ${CI_DEPS}
     - name: make
       run: >-
         make -j CFLAGS="${CI_CFLAGS}"
