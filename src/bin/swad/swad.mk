@@ -23,7 +23,7 @@ EXP_BZERO_S_HEADERS=	strings.h
 EXP_BZERO_S_ARGS=	void *, size_t
 EXP_BZERO_S_RETURN=	void
 
-swad_VERSION=		0.11
+swad_VERSION=		0.12
 swad_MODULES=		authenticator \
 			config \
 			handler/login \
