@@ -356,6 +356,17 @@ The following build options are available:
 
   Default: `off`
 
+* `WITH_POSER_EVENTFD` (bool, only for `BUNDLED_POSER=on`): Require
+  `eventfd`, fail the build if not available. Note that `event ports` or
+  `kqueue` are always preferred for providing user events if available.
+
+  Default: `off`
+
+* `WITHOUT_POSER_EVENTFD` (bool, only for `BUNDLED_POSER=on`): Never use
+  `eventfd` even if detected.
+
+  Default: `off`
+
 * `WITH_POSER_SIGNALFD` (bool, only for `BUNDLED_POSER=on`): Require
   `signalfd`, fail the build if not available. Note that `kqueue` is always
   preferred for handling signals if available.
