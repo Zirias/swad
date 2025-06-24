@@ -974,6 +974,7 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers,
     Config *other = PSC_malloc(sizeof *other);
     memset(other, 0, sizeof *other);
     other->resolveHosts = self->resolveHosts;
+    other->logLevel = -1;
     other->cfgfile = self->cfgfile;
     int fd = open(other->cfgfile, O_RDONLY|O_CLOEXEC);
     FILE *f = 0;
@@ -990,7 +991,6 @@ void Config_reread(Config *self, ConfigUpdateHandler *handlers,
     fclose(f);
 
     self->resolveHostsCfg = other->resolveHostsCfg;
-    self->verbose = other->verbose;
     self->logLevel = other->logLevel;
     self->nloginLimits = other->nloginLimits;
     memcpy(self->loginSeconds, other->loginSeconds,
