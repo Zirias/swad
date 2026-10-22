@@ -5,6 +5,7 @@
 #include "../authenticator.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <pthread.h>
 #include <poser/core.h>
 #include <pwd.h>
@@ -225,7 +226,16 @@ static AuthResult check(void *obj, const char *user, const char *pw,
     }
     pthread_mutex_unlock(&pamLock);
 
-    sem_wait(&authLock);
+    if (sem_wait(&authLock) < 0)
+    {
+	// EINTR can only happen when the thread job is canceled while waiting
+	// for the sempahore, so failing quickly is appropriate.
+	if (errno == EINTR) return AR_FAILED;
+
+	// No other error must ever occur
+	PSC_Service_panic("Unexpected error waiting on semaphore!");
+    }
+
     req.ok = 0;
     req.pw = pw;
     snprintf(req.qualifiedUser, sizeof req.qualifiedUser, "%s:%s\n",
