@@ -7,6 +7,7 @@
 #include "proxylist.h"
 #include "tmpl.h"
 
+#include <errno.h>
 #include <fcntl.h>
 #include <poser/core.h>
 #include <semaphore.h>
@@ -63,19 +64,25 @@ static sem_t authlock;
 static sem_t authrlock;
 static int authreaders;
 
+#define sem_wait_nointr(semp) do { \
+    while (sem_wait(semp) < 0) { \
+	if (errno != EINTR) PSC_Service_panic("Unexpected error waiting on semaphore!"); \
+    } \
+} while (0)
+
 #define authrenter() do { \
-    sem_wait(&authrlock); \
-    if (!authreaders++) sem_wait(&authlock); \
+    sem_wait_nointr(&authrlock); \
+    if (!authreaders++) sem_wait_nointr(&authlock); \
     sem_post(&authrlock); \
 } while (0)
 
 #define authrleave() do { \
-    sem_wait(&authrlock); \
+    sem_wait_nointr(&authrlock); \
     if (!--authreaders) sem_post(&authlock); \
     sem_post(&authrlock); \
 } while (0)
 
-#define authwenter() sem_wait(&authlock)
+#define authwenter() sem_wait_nointr(&authlock)
 #define authwleave() sem_post(&authlock)
 
 static void deleteRealm(void *obj)
