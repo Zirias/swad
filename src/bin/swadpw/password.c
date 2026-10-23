@@ -60,7 +60,7 @@ static int writeprompt(int *fd, const void *buf, size_t nbytes,
 	    if (!isatty(STDERR_FILENO)) goto notty;
 	    *fd = STDERR_FILENO;
 	}
-	if ((rc = write(*fd, buf, nbytes) < 0)) goto ioerr;
+	if ((rc = write(*fd, buf, nbytes)) < 0) goto ioerr;
     }
     return rc;
 
