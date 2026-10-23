@@ -121,6 +121,7 @@ static Password *readFromTerminal(const char *user)
     Password *self = 0;
     const char *error = 0;
     int pfd = -1;
+    int tcrc = -1;
     unsigned i;
     struct sigaction sa;
     struct sigaction origsa[sizeof intrsigs / sizeof *intrsigs];
@@ -143,7 +144,7 @@ static Password *readFromTerminal(const char *user)
     }
 
     struct termios tios;
-    if (tcgetattr(STDIN_FILENO, &tios) < 0)
+    if ((tcrc = tcgetattr(STDIN_FILENO, &tios)) < 0)
     {
 	error = "Error getting terminal attributes.\n";
 	goto done;
@@ -183,7 +184,7 @@ static Password *readFromTerminal(const char *user)
 done:
     wipemem(pw2, sizeof pw2);
     for (unsigned j = 0; j < i; ++j) sigaction(intrsigs[j], origsa+j, 0);
-    tcsetattr(STDIN_FILENO, TCSANOW, &tios);
+    if (tcrc >= 0) tcsetattr(STDIN_FILENO, TCSANOW, &tios);
     if (interrupted) error = "Password input interrupted.\n";
     if (error)
     {
